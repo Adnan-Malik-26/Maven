@@ -11,3 +11,6 @@ description: Universal rules and memory for the agent
 2. **Database Status Knowledge**: 
    - Supabase project holds following tables: `users`, `analysis_jobs`, `analysis_results`.
    - All tables are correctly provisioned with RLS enabled.
+
+3. **Test Scripts Rule**:
+   - Any manual or automated test scripts (especially internal/end-to-end sandbox checks) MUST be created and saved explicitly inside the `./tests/` directory. They should never be placed in `/tmp` or the root layer of the backend application unless strictly necessary for deployment.

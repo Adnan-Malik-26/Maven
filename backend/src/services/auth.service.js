@@ -1,8 +1,8 @@
-const { supabase } = require('./supabase.service');
+const { supabase, supabaseAdmin } = require('./supabase.service');
 
 /**
  * Sign up a new user with Supabase Auth.
- * The PostgreSQL trigger will automatically sync them to public.users!
+ * Manually saves the created user to the public.users table.
  */
 async function signUp(email, password, firstName, lastName) {
   const { data, error } = await supabase.auth.signUp({
@@ -18,6 +18,21 @@ async function signUp(email, password, firstName, lastName) {
 
   if (error) {
     throw new Error(`SignUp Error: ${error.message}`);
+  }
+
+  // If Supabase created the user, explicitly push it into the public.users table using the Admin role
+  if (data && data.user) {
+    const { error: dbError } = await supabaseAdmin.from('users').insert({
+      id: data.user.id,
+      email: data.user.email,
+      first_name: firstName,
+      last_name: lastName
+    });
+
+    if (dbError) {
+      console.error("Trigger bypass failed, couldn't insert into public.users:", dbError);
+      throw new Error(`Failed to initialize user profile database: ${dbError.message}`);
+    }
   }
 
   return data;
