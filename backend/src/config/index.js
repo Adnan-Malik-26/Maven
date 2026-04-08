@@ -6,12 +6,17 @@ function requireEnv(key) {
   return value;
 }
 
-export const config = {
+const config = {
   port: process.env.PORT || 4000,
   nodeEnv: process.env.NODE_ENV || 'development',
-  
-  // Future config sections will be added here
-  // supabase: { ... },
+
+  supabase: {
+    url: requireEnv('SUPABASE_URL'),
+    anonKey: requireEnv('SUPABASE_ANON_KEY'),
+    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+  },
   // mlServices: { ... },
   // upload: { ... },
 };
+
+module.exports = { config };

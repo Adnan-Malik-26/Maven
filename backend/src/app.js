@@ -1,6 +1,6 @@
-import express from 'express';
-import cors from 'cors';
-import { logger } from './utils/logger.js';
+const express = require('express');
+const cors = require('cors');
+const { logger } = require('./utils/logger.js');
 
 const app = express();
 
@@ -9,12 +9,16 @@ app.use(express.json());
 
 // Request logging middleware
 app.use((req, res, next) => {
-  logger.info(`${req.method} ${req.path}`);
+  logger.info(`${req.method} ${req.path}  `);
   next();
 });
+// Import routes
+const authRoutes = require('./routes/auth.routes');
+
+app.use('/api/auth', authRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-export default app;
+module.exports = app;

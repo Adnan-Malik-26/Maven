@@ -1,7 +1,7 @@
-import 'dotenv/config';
-import app from './src/app.js';
-import { config } from './src/config/index.js';
-import { logger } from './src/utils/logger.js';
+require('dotenv/config');
+const app = require('./src/app.js');
+const { config } = require('./src/config/index.js');
+const { logger } = require('./src/utils/logger.js');
 
 const PORT = config.port;
 
