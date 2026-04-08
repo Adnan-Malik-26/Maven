@@ -35,3 +35,20 @@ It provides a complete RESTful API for authenticating users. Users can sign up, 
 ## How it works (for the developer)
 - **Data Syncing:** Instead of relying on backend JavaScript to insert a record into the `public.users` table after a successful signup, the database itself handles it via a PostgreSQL trigger (`handle_new_user`). Since this function is attached to an `AFTER INSERT` event on `auth.users`, the sync is guaranteed to execute atomically within the database.
 - **Service Layering:** The API endpoints (`auth.routes.js`) pass the request to the controllers (`auth.controller.js`), which parses the request and hands over the pure variables (e.g. `email`, `password`) to the stateless business logic in `auth.service.js`. This prevents database dependencies from bleeding into HTTP presentation code.
+
+---
+
+# Task Done 3: Video Upload & Analysis Job Integration
+
+## How the task was done
+1. Configured the `Multer` middleware to parse multi-part standard forms from client browsers, filtering only for `'video/mp4, video/webm'` files.
+2. Added `uploadVideoToStorage` function to bypass internal API RLS issues using the Admin client to natively inject videos directly into the `maven-videos` bucket.
+3. Automatically converted internal bucket URLs into web-resolved Public URL links via Supabase Storage commands.
+4. Bound the uploaded video's public web URL directly to the Postgres `analysis_jobs` table, bypassing row-level database security with explicit backend privileges.
+
+## What it does
+It provides a protected, authenticated route (`POST /api/analysis/submit`) that takes a video file, checks for strict size ceilings, pushes the file securely up to your custom Supabase storage node, and registers a brand new 'job' in the database ready for your AI to read and analyze! 
+
+## How it works (for the developer)
+- **RLS Bypassing:** When data is pushed from users natively inside the application without being routed via the Frontend Web Client, it gets blocked by Row-Level Security parameters. For file injections specifically, we leveraged our server-end `supabaseAdmin` configuration.
+- **Multipart Data Handling:** Node.js explicitly ignores standard JSON conversions for Files. The `Multer` library wraps our incoming network pipeline, blocking malicious files based on mimetype strings *before* hitting the rest of the application cycle logic handling inside the Controllers format!

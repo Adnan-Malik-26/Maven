@@ -1,4 +1,4 @@
-const { supabase } = require('./supabase.service');
+const { supabase, supabaseAdmin } = require('./supabase.service');
 
 /**
  * Uploads a file to the maven-videos bucket
@@ -8,7 +8,14 @@ const { supabase } = require('./supabase.service');
  * @returns {Promise<string>} The file path in storage
  */
 async function uploadVideoToStorage(fileBuffer, originalName, userId) {
-  // Logic here
+  const { data, error } = await supabaseAdmin.storage.from('maven-videos').upload(`${userId}/${originalName}`, fileBuffer, {
+      contentType: 'video/mp4'
+  });
+  
+  if (error) {
+    throw error;
+  }
+  return data.path;
 }
 
 /**
@@ -18,7 +25,29 @@ async function uploadVideoToStorage(fileBuffer, originalName, userId) {
  * @returns {Promise<Object>} The new job row
  */
 async function createAnalysisJob(userId, videoPath) {
-  // Logic here
+  // 1. Convert the internal videoPath into a full public URL
+  const { data: publicUrlData } = supabase.storage
+    .from('maven-videos')
+    .getPublicUrl(videoPath);
+    
+  const videoUrl = publicUrlData.publicUrl;
+
+  // 2. Insert into the database using supabaseAdmin to bypass backend RLS proxies
+  const { data, error } = await supabaseAdmin
+    .from('analysis_jobs')
+    .insert({
+      user_id: userId,
+      video_path: videoUrl,
+      status: 'PROCESSING'
+    })
+    .select() // Ask Supabase to return the newly inserted row
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to create analysis job: ${error.message}`);
+  }
+
+  return data;
 }
 
 /**
