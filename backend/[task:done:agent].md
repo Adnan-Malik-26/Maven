@@ -52,3 +52,21 @@ It provides a protected, authenticated route (`POST /api/analysis/submit`) that 
 ## How it works (for the developer)
 - **RLS Bypassing:** When data is pushed from users natively inside the application without being routed via the Frontend Web Client, it gets blocked by Row-Level Security parameters. For file injections specifically, we leveraged our server-end `supabaseAdmin` configuration.
 - **Multipart Data Handling:** Node.js explicitly ignores standard JSON conversions for Files. The `Multer` library wraps our incoming network pipeline, blocking malicious files based on mimetype strings *before* hitting the rest of the application cycle logic handling inside the Controllers format!
+
+---
+
+# Task Done 4: ML Orchestrator & Final Aggregation
+
+## How the task was done
+1. Created `aggregator.js` to compute a weighted final verdict using scores from 3 simulated Python machine learning microservices (FFT at 30%, Liveness at 40%, LipSync at 30%).
+2. Created `mlOrchestrator.js` using the native `fetch` API and `Promise.all()` to orchestrate parallel HTTP requests to the ML microservices, enforced by a 2-minute timeout (`AbortController`).
+3. Fully integrated `runMLAnalysis` into the `/api/analysis/submit` backend endpoint safely as an un-awaited background process.
+4. Resolved a partial implementation bug in `analysis.service.js` by explicitly defining the database update sequence linking `analysis_results` records to completed `analysis_jobs`.
+
+## What it does
+It powers the core AI evaluation logic of the platform. By passing the safely uploaded video files down to Python analyzers in parallel, standardizing their output probabilities, computing a final Confidence Score (`< 0.40 = REAL`), and logging everything into Supabase.
+
+## How it works (for the developer)
+- **Parallel Fan-out Execution:** Passing an array of active `fetch` requests into a `Promise.all` immediately delegates them to the network asynchronously, stopping the backend from waiting 3 separate times cumulatively. 
+- **Non-blocking Request Handling:** The Express Controller deliberately sends a `202 Accepted` to the client browser and kicks off `runMLAnalysis().catch(...)` into the node event loop without wait locking. 
+- **Graceful Timeouts:** Node's `AbortController` throws an exception if the Python container freezes up past 120,000 milliseconds, ensuring pending database Jobs accurately mark themselves `FAILED`.

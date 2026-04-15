@@ -509,13 +509,11 @@ src/
 
 ### 📦 Libraries Needed
 
-```bash
-npm install axios
-```
+None new — you will use the built-in `fetch` API.
 
 | Library | Why you need it |
 |---------|----------------|
-| `axios` | HTTP client library. You use it to make POST requests to the Python ML services from your Node.js backend. Cleaner than the built-in `fetch` for error handling, timeouts, and response parsing. |
+| `fetch` | Native HTTP client. You use it to make POST requests to the Python ML services from your Node.js backend without adding extra dependencies. |
 
 ### 🧠 Key Concepts
 
@@ -539,8 +537,8 @@ npm install axios
 2. **Build `mlOrchestrator.js`**:
    - Export an async function `runMLAnalysis(videoPath, jobId)`
    - Read the 3 ML service URLs from your config
-   - Use `Promise.all()` with 3 `axios.post()` calls, each sending `{ video_path: videoPath }` to the `/analyze` endpoint
-   - Set a timeout on each request (2 minutes)
+   - Use `Promise.all()` with 3 `fetch()` POST requests, each sending `{ video_path: videoPath }` to the `/analyze` endpoint
+   - Implement a timeout on each request using `AbortController` (2 minutes)
    - Pass the 3 results to `computeFinalVerdict()`
    - Call `saveAnalysisResult()` from your Supabase service
    - **In the catch block**: call `markJobFailed()` so the job doesn't stay stuck in PROCESSING forever
@@ -555,7 +553,7 @@ npm install axios
 ```bash
 # Upload a video → should get 202 immediately
 # Then check Supabase dashboard → job status should become FAILED
-# (because the ML services aren't running, axios will get connection refused)
+# (because the ML services aren't running, fetch will get connection refused)
 ```
 
 **With mock Python services** — create a tiny Express server on ports 8001/8002/8003 that returns fake scores:
@@ -835,13 +833,12 @@ After completing all 10 features, verify the complete flow works end-to-end:
 | `winston` | 2 | `npm install winston` |
 | `@supabase/supabase-js` | 3 | `npm install @supabase/supabase-js` |
 | `multer` | 5 | `npm install multer` |
-| `axios` | 7 | `npm install axios` |
 | `socket.io` | 8 | `npm install socket.io` |
 | `joi` | 10 | `npm install joi` |
 
 Or install everything at once:
 ```bash
-npm install express cors dotenv winston @supabase/supabase-js multer axios socket.io joi
+npm install express cors dotenv winston @supabase/supabase-js multer socket.io joi
 ```
 
 ---

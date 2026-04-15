@@ -1,4 +1,5 @@
 const { uploadVideoToStorage, createAnalysisJob } = require('../services/analysis.service');
+const { runMLAnalysis } = require('../services/mlOrchestrator');
 
 async function submitVideo(req, res, next) {
 
@@ -10,16 +11,16 @@ async function submitVideo(req, res, next) {
     }
 
     try {
-        const userId = req.user.id;
-        const fileBuffer = req.file.buffer;
-        
+        const userId = req.user?.id;
+        const fileBuffer = req.file?.buffer;
+
         // BUG FIX: Multer sets the property to 'originalname' (lowercase n)
-        const originalName = req.file.originalname;
+        const originalName = req.file?.originalname;
 
         // OPTIMIZATION: Appending a timestamp prevents users from overwriting files with the same name
         const uniqueFileName = `${Date.now()}-${originalName}`;
         const videoPath = await uploadVideoToStorage(fileBuffer, uniqueFileName, userId);
-        
+
         if (!videoPath) {
             return res.status(400).json({
                 message: "Failed to upload video"
@@ -29,14 +30,18 @@ async function submitVideo(req, res, next) {
         // Add the Database Save sequence!
         const analysisJob = await createAnalysisJob(userId, videoPath);
 
-        // OPTIMIZATION & BUG FIX: You forgot to return a success response! 
-        // The API would have hung forever since `res.send()` was never called.
-        return res.status(200).json({
-            message: "Video uploaded and Analysis Job created successfully",
-            data: { 
-                job: analysisJob 
-            }
+
+        res.status(202).json({
+            message: "Analysis started",
+            jobId: analysisJob.id,
         });
+
+        // Run ML analysis in the background without awaiting it
+        runMLAnalysis(videoPath, analysisJob.id).catch((err) => {
+            console.error("Background task error:", err);
+        });
+
+        return;
 
     } catch (err) {
         return res.status(500).json({
@@ -46,6 +51,10 @@ async function submitVideo(req, res, next) {
     }
 
 };
+
+
+
+
 
 
 module.exports = {

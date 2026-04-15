@@ -9,9 +9,9 @@ const { supabase, supabaseAdmin } = require('./supabase.service');
  */
 async function uploadVideoToStorage(fileBuffer, originalName, userId) {
   const { data, error } = await supabaseAdmin.storage.from('maven-videos').upload(`${userId}/${originalName}`, fileBuffer, {
-      contentType: 'video/mp4'
+    contentType: 'video/mp4'
   });
-  
+
   if (error) {
     throw error;
   }
@@ -29,7 +29,7 @@ async function createAnalysisJob(userId, videoPath) {
   const { data: publicUrlData } = supabase.storage
     .from('maven-videos')
     .getPublicUrl(videoPath);
-    
+
   const videoUrl = publicUrlData.publicUrl;
 
   // 2. Insert into the database using supabaseAdmin to bypass backend RLS proxies
@@ -41,7 +41,7 @@ async function createAnalysisJob(userId, videoPath) {
       status: 'PROCESSING'
     })
     .select() // Ask Supabase to return the newly inserted row
-    .single();
+    .single(); // Ask Supabase to return only one row
 
   if (error) {
     throw new Error(`Failed to create analysis job: ${error.message}`);
@@ -58,7 +58,32 @@ async function createAnalysisJob(userId, videoPath) {
  * @returns {Promise<Object>} The completed job + results
  */
 async function saveAnalysisResult(jobId, verdict, rawResults) {
-  // Logic here
+  // 1. Insert the result into the analysis_results table
+  const { error: resultError } = await supabaseAdmin
+    .from('analysis_results')
+    .insert({
+      job_id: jobId,
+      verdict: verdict,
+      raw_results: rawResults
+    });
+
+  if (resultError) {
+    throw new Error(`Failed to save analysis result: ${resultError.message}`);
+  }
+
+  // 2. Update the analysis_jobs table to set status to COMPLETED
+  const { data: jobData, error: jobError } = await supabaseAdmin
+    .from('analysis_jobs')
+    .update({ status: 'COMPLETED' })
+    .eq('id', jobId)
+    .select()
+    .single();
+
+  if (jobError) {
+    throw new Error(`Failed to update job status: ${jobError.message}`);
+  }
+
+  return { ...jobData, verdict, rawResults };
 }
 
 /**
@@ -68,7 +93,16 @@ async function saveAnalysisResult(jobId, verdict, rawResults) {
  * @returns {Promise<Object>} The updated job row
  */
 async function markJobFailed(jobId, errorMessage) {
-  // Logic here
+
+  const { data, error } = supabaseAdmin.from('analysis_jobs').eq('id', jobId)
+    .update({ status: "FAILED", error_message: errorMessage })
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to mark job as failed: ${error.message}`);
+  }
+  return data;
 }
 
 /**
