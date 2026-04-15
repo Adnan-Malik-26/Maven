@@ -1,0 +1,83 @@
+# LipSync Service: Step-by-Step Implementation Plan
+
+The goal of the **LipSync Service** is to check the *Audio-Visual (AV) consistency* of a video. Real humans have perfectly matching mouth movements with the words they are saying. Deepfakes (especially puppeteering or dubbing) often have slight desynchronizations. We will detect this by analyzing the audio track against the movement of the lips.
+
+This system takes inspiration from models like **SyncNet**, breaking it down into simple, manageable pieces.
+
+## Proposed Changes & File Breakdown
+
+### 📦 1. `requirements.txt` (Dependencies)
+We need specific libraries to handle video, audio, mathematical operations, and the API.
+
+**To-do in this file:**
+- Add `fastapi` and `uvicorn` for the web server.
+- Add `opencv-python` to read video frames.
+- Add `librosa` to process the audio track and extract patterns.
+- Add `mediapipe` (by Google) to accurately detect the face and track the lips.
+- Add `moviepy` to separate the audio map from the video.
+- Add `torch` or `scikit-learn` for running the final cross-modal sync check.
+
+---
+
+### 🎥 2. `lip_tracker.py` (The Eyes)
+This file is responsible for "watching" the person's mouth.
+
+**To-do in this file:**
+- **Load Video:** Write a function to extract frames using OpenCV.
+- **Find the Face:** Use `mediapipe` Face Mesh to pinpoint the exact locations of the lips (the inner and outer lip contours).
+- **Calculate Distance:** For each frame, calculate how open the mouth is (vertical distance) and how wide it is (horizontal distance).
+- **Output:** Return a list or array of numbers representing mouth movements over time (a "lip movement sequence").
+
+---
+
+### 🎵 3. `audio_processor.py` (The Ears)
+This file is responsible for "listening" to the speech.
+
+**To-do in this file:**
+- **Extract Audio:** Use `moviepy` to rip the audio track out of the `.mp4` file into a temporary `.wav` file.
+- **Process Audio:** Load the `.wav` file using `librosa`.
+- **Extract Features (MFCC):** Convert the raw sound waves into MFCCs (Mel-Frequency Cepstral Coefficients). Think of MFCCs as a "visual map" of sound that captures phonetic characteristics (like the sound of "p", "b", "m").
+- **Output:** Return an array of numbers representing the audio phonetic track (an "audio feature sequence").
+
+---
+
+### 🧠 4. `cross_modal_transformer.py` (The Brain)
+This file compares what it *sees* with what it *hears*.
+
+**To-do in this file:**
+- **Alignment:** Take the "lip movement sequence" and the "audio feature sequence" and ensure they span the exact same length of time.
+- **Correlation Check:** Implement a mathematical function (e.g., Cross-Correlation or Cosine Similarity) to see how tightly the mouth opening/closing aligns with the loudness/phonetics in the audio track.
+- **Scoring:**
+    - If they align perfectly -> `sync_score` is close to 1.0 (REAL).
+    - If there is a delay or mismatch -> `sync_score` is lower (FAKE).
+- **Final Output:** Return the computed `sync_score`.
+
+---
+
+### 🚀 5. `main.py` (The Server)
+This is the glue that brings everything together and exposes it so the Orchestrator can call it.
+
+**To-do in this file:**
+- **Set up FastAPI:** Create a new application instance.
+- **Create Schema:** Define the input expected (e.g., `{"video_path": "/path/to/vid.mp4"}`).
+- **Define Endpoint (`POST /analyze`):**
+    1. Receive the `video_path`.
+    2. Call `lip_tracker.py` to get mouth movements.
+    3. Call `audio_processor.py` to get audio features.
+    4. Pass both into `cross_modal_transformer.py`.
+    5. Return a JSON response matching the orchestrator's expectations: 
+       `{"artifact_score": [inverted sync_score], "sync_score": [computed score], "verdict": "REAL/FAKE"}` (Wait, wait—we need to return `sync_score` as expected by your `aggregator.js`).
+
+## Open Questions
+
+- Does the environment where this service operates (Docker, local) have FFmpeg installed at the OS level? (Libraries like `moviepy` heavily depend on it).
+- How much precision do you want in the cross-modal sync check? We can use simple Euclidean distance/Cross-Correlation for this project tier, or we can look into pre-trained PyTorch weight files if you'd like to use a full Deep Neural Network equivalent to SyncNet.
+
+## Verification Plan
+
+### Automated Tests
+- Upload a perfectly synced stock video and verify the API returns a score indicating it is REAL (sync near 1.0).
+- Upload the same video after artificially shifting the audio 0.5 seconds out of sync—verify the score drops indicating a FAKE.
+
+### Manual Verification
+- We can spin up the service via `python -m uvicorn main:app --port 8003` and hit the `/analyze` endpoint using cURL to test.
