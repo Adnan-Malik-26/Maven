@@ -1,0 +1,467 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+  <root>
+    <mxCell id="0" />
+    <mxCell id="1" parent="0" />
+
+    <!-- ===== TITLE ===== -->
+    <mxCell id="title" value="MAVEN — Multimodal Audio-Visual Examination Network" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;fontColor=#1a1a2e;" vertex="1" parent="1">
+      <mxGeometry x="227" y="20" width="1200" height="40" as="geometry" />
+    </mxCell>
+
+    <!-- ===== USER ===== -->
+    <mxCell id="user" value="&lt;b&gt;User / Browser&lt;/b&gt;&lt;br&gt;Uploads video, views results" style="shape=mxgraph.aws4.user;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="680" y="80" width="60" height="70" as="geometry" />
+    </mxCell>
+
+    <!-- ===== REACT FRONTEND CONTAINER ===== -->
+    <mxCell id="fe_bg" value="React 18 Frontend" style="swimlane;startSize=30;fillColor=#e8f4fd;strokeColor=#3b82f6;strokeWidth=2;fontStyle=1;fontSize=13;fontColor=#1e40af;rounded=1;arcSize=4;" vertex="1" parent="1">
+      <mxGeometry x="230" y="210" width="1200" height="180" as="geometry" />
+    </mxCell>
+
+    <mxCell id="fe_home" value="&lt;b&gt;Home&lt;/b&gt;&lt;br&gt;Landing, CTA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=11;" vertex="1" parent="fe_bg">
+      <mxGeometry x="20" y="50" width="120" height="50" as="geometry" />
+    </mxCell>
+    <mxCell id="fe_auth" value="&lt;b&gt;Auth Page&lt;/b&gt;&lt;br&gt;Login / Signup" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=11;" vertex="1" parent="fe_bg">
+      <mxGeometry x="160" y="50" width="120" height="50" as="geometry" />
+    </mxCell>
+    <mxCell id="fe_upload" value="&lt;b&gt;Upload Page&lt;/b&gt;&lt;br&gt;DropZone, progress" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=11;" vertex="1" parent="fe_bg">
+      <mxGeometry x="300" y="50" width="140" height="50" as="geometry" />
+    </mxCell>
+    <mxCell id="fe_dash" value="&lt;b&gt;Dashboard&lt;/b&gt;&lt;br&gt;Job list, status badges" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=11;" vertex="1" parent="fe_bg">
+      <mxGeometry x="460" y="50" width="140" height="50" as="geometry" />
+    </mxCell>
+    <mxCell id="fe_result" value="&lt;b&gt;Result Page&lt;/b&gt;&lt;br&gt;Verdict, charts, explainability" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=11;" vertex="1" parent="fe_bg">
+      <mxGeometry x="620" y="50" width="160" height="50" as="geometry" />
+    </mxCell>
+
+    <!-- Frontend subcomponents -->
+    <mxCell id="fe_comps" value="&lt;b&gt;Components:&lt;/b&gt; VerdictCard · ScoreBreakdown (Recharts) · SyncTimeline · RppgChart · BlinkStats · JobTable · StatusBadge" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#93c5fd;fontSize=10;" vertex="1" parent="fe_bg">
+      <mxGeometry x="800" y="50" width="370" height="50" as="geometry" />
+    </mxCell>
+    <mxCell id="fe_hooks" value="&lt;b&gt;Hooks:&lt;/b&gt; useAnalysis · useRealtime (useJobStatus)&lt;br&gt;&lt;b&gt;Libs:&lt;/b&gt; Axios · Supabase JS · Framer Motion · Tailwind" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#93c5fd;fontSize=10;" vertex="1" parent="fe_bg">
+      <mxGeometry x="20" y="120" width="550" height="45" as="geometry" />
+    </mxCell>
+    <mxCell id="fe_router" value="&lt;b&gt;React Router v6&lt;/b&gt;&lt;br&gt;Protected routes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#93c5fd;fontSize=10;" vertex="1" parent="fe_bg">
+      <mxGeometry x="590" y="120" width="160" height="45" as="geometry" />
+    </mxCell>
+    <mxCell id="fe_supabase_client" value="&lt;b&gt;supabaseClient.js&lt;/b&gt;&lt;br&gt;Auth + Realtime subs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#93c5fd;fontSize=10;" vertex="1" parent="fe_bg">
+      <mxGeometry x="770" y="120" width="170" height="45" as="geometry" />
+    </mxCell>
+    <mxCell id="fe_vite" value="&lt;b&gt;Vite&lt;/b&gt; build tool" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#93c5fd;fontSize=10;" vertex="1" parent="fe_bg">
+      <mxGeometry x="960" y="120" width="100" height="45" as="geometry" />
+    </mxCell>
+    <mxCell id="fe_vercel" value="&lt;b&gt;Deploy: Vercel&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=10;" vertex="1" parent="fe_bg">
+      <mxGeometry x="1070" y="120" width="110" height="45" as="geometry" />
+    </mxCell>
+
+    <!-- ===== NGINX ===== -->
+    <mxCell id="nginx" value="&lt;b&gt;Nginx&lt;/b&gt;&lt;br&gt;Reverse Proxy · Port 80" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;strokeWidth=2;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="680" y="430" width="160" height="55" as="geometry" />
+    </mxCell>
+
+    <!-- ===== NODE.JS BACKEND CONTAINER ===== -->
+    <mxCell id="be_bg" value="Node.js 20 LTS / Express Backend — Port 4000" style="swimlane;startSize=30;fillColor=#fdf4ff;strokeColor=#9333ea;strokeWidth=2;fontStyle=1;fontSize=13;fontColor=#6b21a8;rounded=1;arcSize=4;" vertex="1" parent="1">
+      <mxGeometry x="230" y="530" width="1200" height="260" as="geometry" />
+    </mxCell>
+
+    <!-- Routes -->
+    <mxCell id="be_routes_bg" value="Routes" style="swimlane;startSize=22;fillColor=#f3e8ff;strokeColor=#c084fc;fontSize=11;fontStyle=1;" vertex="1" parent="be_bg">
+      <mxGeometry x="20" y="45" width="270" height="100" as="geometry" />
+    </mxCell>
+    <mxCell id="be_auth_route" value="auth.routes.js" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#faf5ff;strokeColor=#c084fc;fontSize=10;" vertex="1" parent="be_routes_bg">
+      <mxGeometry x="10" y="30" width="75" height="35" as="geometry" />
+    </mxCell>
+    <mxCell id="be_analysis_route" value="analysis.routes.js" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#faf5ff;strokeColor=#c084fc;fontSize=10;" vertex="1" parent="be_routes_bg">
+      <mxGeometry x="97" y="30" width="75" height="35" as="geometry" />
+    </mxCell>
+    <mxCell id="be_results_route" value="results.routes.js" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#faf5ff;strokeColor=#c084fc;fontSize=10;" vertex="1" parent="be_routes_bg">
+      <mxGeometry x="184" y="30" width="75" height="35" as="geometry" />
+    </mxCell>
+
+    <!-- Middleware -->
+    <mxCell id="be_mw_bg" value="Middleware" style="swimlane;startSize=22;fillColor=#f3e8ff;strokeColor=#c084fc;fontSize=11;fontStyle=1;" vertex="1" parent="be_bg">
+      <mxGeometry x="20" y="160" width="270" height="85" as="geometry" />
+    </mxCell>
+    <mxCell id="be_auth_mw" value="auth.middleware.js&lt;br&gt;Supabase JWT" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#faf5ff;strokeColor=#c084fc;fontSize=10;" vertex="1" parent="be_mw_bg">
+      <mxGeometry x="10" y="28" width="75" height="40" as="geometry" />
+    </mxCell>
+    <mxCell id="be_upload_mw" value="upload.middleware.js&lt;br&gt;Multer config" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#faf5ff;strokeColor=#c084fc;fontSize=10;" vertex="1" parent="be_mw_bg">
+      <mxGeometry x="97" y="28" width="75" height="40" as="geometry" />
+    </mxCell>
+    <mxCell id="be_error_mw" value="error.middleware.js" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#faf5ff;strokeColor=#c084fc;fontSize=10;" vertex="1" parent="be_mw_bg">
+      <mxGeometry x="184" y="28" width="75" height="40" as="geometry" />
+    </mxCell>
+
+    <!-- Controllers -->
+    <mxCell id="be_ctrl_bg" value="Controllers" style="swimlane;startSize=22;fillColor=#f3e8ff;strokeColor=#c084fc;fontSize=11;fontStyle=1;" vertex="1" parent="be_bg">
+      <mxGeometry x="310" y="45" width="240" height="100" as="geometry" />
+    </mxCell>
+    <mxCell id="be_analysis_ctrl" value="&lt;b&gt;analysis.controller.js&lt;/b&gt;&lt;br&gt;submitVideo(), get jobs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#faf5ff;strokeColor=#c084fc;fontSize=10;" vertex="1" parent="be_ctrl_bg">
+      <mxGeometry x="10" y="30" width="103" height="50" as="geometry" />
+    </mxCell>
+    <mxCell id="be_results_ctrl" value="&lt;b&gt;results.controller.js&lt;/b&gt;&lt;br&gt;getResult(), delete" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#faf5ff;strokeColor=#c084fc;fontSize=10;" vertex="1" parent="be_ctrl_bg">
+      <mxGeometry x="125" y="30" width="103" height="50" as="geometry" />
+    </mxCell>
+
+    <!-- Services -->
+    <mxCell id="be_svc_bg" value="Services" style="swimlane;startSize=22;fillColor=#f3e8ff;strokeColor=#c084fc;fontSize=11;fontStyle=1;" vertex="1" parent="be_bg">
+      <mxGeometry x="310" y="160" width="340" height="85" as="geometry" />
+    </mxCell>
+    <mxCell id="be_supabase_svc" value="supabase.service.js&lt;br&gt;DB + Storage ops" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#faf5ff;strokeColor=#c084fc;fontSize=10;" vertex="1" parent="be_svc_bg">
+      <mxGeometry x="10" y="28" width="100" height="40" as="geometry" />
+    </mxCell>
+    <mxCell id="be_orchestrator" value="&lt;b&gt;mlOrchestrator.js&lt;/b&gt;&lt;br&gt;Fan-out to ML services" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#faf5ff;strokeColor=#c084fc;fontSize=10;" vertex="1" parent="be_svc_bg">
+      <mxGeometry x="120" y="28" width="100" height="40" as="geometry" />
+    </mxCell>
+    <mxCell id="be_aggregator" value="&lt;b&gt;aggregator.js&lt;/b&gt;&lt;br&gt;Score fusion logic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#faf5ff;strokeColor=#c084fc;fontSize=10;" vertex="1" parent="be_svc_bg">
+      <mxGeometry x="230" y="28" width="100" height="40" as="geometry" />
+    </mxCell>
+
+    <!-- Socket.io -->
+    <mxCell id="be_socket" value="&lt;b&gt;Socket.io&lt;/b&gt;&lt;br&gt;Real-time progress&lt;br&gt;to frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fdf4ff;strokeColor=#9333ea;strokeWidth=2;fontSize=11;" vertex="1" parent="be_bg">
+      <mxGeometry x="670" y="55" width="130" height="65" as="geometry" />
+    </mxCell>
+
+    <!-- Backend config/utils -->
+    <mxCell id="be_utils" value="&lt;b&gt;Winston&lt;/b&gt; logging · &lt;b&gt;Joi&lt;/b&gt; validation · &lt;b&gt;dotenv&lt;/b&gt; config · &lt;b&gt;Axios&lt;/b&gt; (call Python services)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#faf5ff;strokeColor=#c084fc;fontSize=10;" vertex="1" parent="be_bg">
+      <mxGeometry x="670" y="135" width="340" height="45" as="geometry" />
+    </mxCell>
+    <mxCell id="be_deploy" value="&lt;b&gt;Deploy: Railway / Render&lt;/b&gt;&lt;br&gt;Node container" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=10;" vertex="1" parent="be_bg">
+      <mxGeometry x="670" y="195" width="160" height="50" as="geometry" />
+    </mxCell>
+    <mxCell id="be_docker_backend" value="&lt;b&gt;Dockerfile.backend&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#10b981;fontSize=10;" vertex="1" parent="be_bg">
+      <mxGeometry x="850" y="195" width="150" height="50" as="geometry" />
+    </mxCell>
+
+    <!-- Score Fusion Logic (callout box) -->
+    <mxCell id="be_fusion_box" value="&lt;b&gt;Score Fusion Weights:&lt;/b&gt;&lt;br&gt;FFT: 0.30 · Liveness: 0.40 · LipSync: 0.30&lt;br&gt;Thresholds: &gt;0.65 → FAKE | 0.40–0.65 → UNCERTAIN | &lt;0.40 → REAL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7ed;strokeColor=#f97316;fontSize=10;" vertex="1" parent="be_bg">
+      <mxGeometry x="1020" y="45" width="165" height="80" as="geometry" />
+    </mxCell>
+
+    <!-- API Reference callout -->
+    <mxCell id="be_api_ref" value="&lt;b&gt;API Endpoints:&lt;/b&gt;&lt;br&gt;POST /analysis/submit&lt;br&gt;GET /analysis/jobs&lt;br&gt;GET /results/:jobId&lt;br&gt;DELETE /analysis/jobs/:id&lt;br&gt;GET /health" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7ed;strokeColor=#f97316;fontSize=10;align=left;" vertex="1" parent="be_bg">
+      <mxGeometry x="1020" y="140" width="165" height="100" as="geometry" />
+    </mxCell>
+
+    <!-- ===== PYTHON ML SERVICES CONTAINER ===== -->
+    <mxCell id="ml_bg" value="Python ML Microservices (FastAPI + Uvicorn)" style="swimlane;startSize=30;fillColor=#fff1f2;strokeColor=#e11d48;strokeWidth=2;fontStyle=1;fontSize=13;fontColor=#9f1239;rounded=1;arcSize=4;" vertex="1" parent="1">
+      <mxGeometry x="230" y="850" width="1200" height="290" as="geometry" />
+    </mxCell>
+
+    <!-- FFT Service -->
+    <mxCell id="fft_bg" value="FFT Service — Port 8001" style="swimlane;startSize=24;fillColor=#fce7f3;strokeColor=#db2777;fontSize=11;fontStyle=1;rounded=1;" vertex="1" parent="ml_bg">
+      <mxGeometry x="20" y="45" width="360" height="230" as="geometry" />
+    </mxCell>
+    <mxCell id="fft_main" value="&lt;b&gt;main.py&lt;/b&gt; (FastAPI)&lt;br&gt;POST /analyze" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fdf2f8;strokeColor=#db2777;fontSize=10;" vertex="1" parent="fft_bg">
+      <mxGeometry x="10" y="32" width="155" height="40" as="geometry" />
+    </mxCell>
+    <mxCell id="fft_analyzer" value="&lt;b&gt;analyzer.py&lt;/b&gt;&lt;br&gt;2D FFT per frame&lt;br&gt;High-Freq Ratio calc&lt;br&gt;Suspicious frame detect" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fdf2f8;strokeColor=#db2777;fontSize=10;" vertex="1" parent="fft_bg">
+      <mxGeometry x="10" y="82" width="155" height="70" as="geometry" />
+    </mxCell>
+    <mxCell id="fft_cnn" value="&lt;b&gt;cnn_classifier.py&lt;/b&gt;&lt;br&gt;CNN on spectral maps&lt;br&gt;(FaceForensics++ trained)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fdf2f8;strokeColor=#db2777;fontSize=10;" vertex="1" parent="fft_bg">
+      <mxGeometry x="10" y="162" width="155" height="55" as="geometry" />
+    </mxCell>
+    <mxCell id="fft_libs" value="&lt;b&gt;Libs:&lt;/b&gt; OpenCV · NumPy/SciPy&lt;br&gt;PyTorch 2.x · FastAPI&lt;br&gt;&lt;b&gt;Output:&lt;/b&gt; artifact_score [0–1]&lt;br&gt;high_freq_ratio, suspicious_frames" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff0f6;strokeColor=#db2777;fontSize=10;" vertex="1" parent="fft_bg">
+      <mxGeometry x="180" y="32" width="165" height="120" as="geometry" />
+    </mxCell>
+    <mxCell id="fft_docker" value="Dockerfile.fft" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#10b981;fontSize=10;" vertex="1" parent="fft_bg">
+      <mxGeometry x="180" y="162" width="165" height="35" as="geometry" />
+    </mxCell>
+
+    <!-- Liveness Service -->
+    <mxCell id="liveness_bg" value="Liveness Service — Port 8002" style="swimlane;startSize=24;fillColor=#fce7f3;strokeColor=#db2777;fontSize=11;fontStyle=1;rounded=1;" vertex="1" parent="ml_bg">
+      <mxGeometry x="400" y="45" width="380" height="230" as="geometry" />
+    </mxCell>
+    <mxCell id="liveness_main" value="&lt;b&gt;main.py&lt;/b&gt; (FastAPI)&lt;br&gt;POST /analyze" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fdf2f8;strokeColor=#db2777;fontSize=10;" vertex="1" parent="liveness_bg">
+      <mxGeometry x="10" y="32" width="160" height="40" as="geometry" />
+    </mxCell>
+    <mxCell id="liveness_rppg" value="&lt;b&gt;rppg.py&lt;/b&gt;&lt;br&gt;MediaPipe face ROI&lt;br&gt;CHROM algorithm&lt;br&gt;Bandpass filter 0.75–3Hz&lt;br&gt;HR BPM estimation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fdf2f8;strokeColor=#db2777;fontSize=10;" vertex="1" parent="liveness_bg">
+      <mxGeometry x="10" y="82" width="160" height="90" as="geometry" />
+    </mxCell>
+    <mxCell id="liveness_blink" value="&lt;b&gt;blink_detector.py&lt;/b&gt;&lt;br&gt;MediaPipe 468 landmarks&lt;br&gt;EAR computation&lt;br&gt;Blink rate vs norm 15–25/min" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fdf2f8;strokeColor=#db2777;fontSize=10;" vertex="1" parent="liveness_bg">
+      <mxGeometry x="10" y="182" width="160" height="38" as="geometry" />
+    </mxCell>
+    <mxCell id="liveness_model" value="&lt;b&gt;liveness_model.py&lt;/b&gt;&lt;br&gt;Fuses rPPG + blink signals" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fdf2f8;strokeColor=#db2777;fontSize=10;" vertex="1" parent="liveness_bg">
+      <mxGeometry x="185" y="32" width="180" height="40" as="geometry" />
+    </mxCell>
+    <mxCell id="liveness_libs" value="&lt;b&gt;Libs:&lt;/b&gt; MediaPipe · OpenCV&lt;br&gt;SciPy · NumPy · PyTorch&lt;br&gt;&lt;b&gt;Output:&lt;/b&gt; liveness_score [0–1]&lt;br&gt;pulse_present, est. HR BPM&lt;br&gt;blink_rate, regularity_score" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff0f6;strokeColor=#db2777;fontSize=10;" vertex="1" parent="liveness_bg">
+      <mxGeometry x="185" y="82" width="180" height="100" as="geometry" />
+    </mxCell>
+    <mxCell id="liveness_docker" value="Dockerfile.liveness" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#10b981;fontSize=10;" vertex="1" parent="liveness_bg">
+      <mxGeometry x="185" y="192" width="180" height="30" as="geometry" />
+    </mxCell>
+
+    <!-- LipSync Service -->
+    <mxCell id="lipsync_bg" value="LipSync Service — Port 8003" style="swimlane;startSize=24;fillColor=#fce7f3;strokeColor=#db2777;fontSize=11;fontStyle=1;rounded=1;" vertex="1" parent="ml_bg">
+      <mxGeometry x="800" y="45" width="380" height="230" as="geometry" />
+    </mxCell>
+    <mxCell id="lipsync_main" value="&lt;b&gt;main.py&lt;/b&gt; (FastAPI)&lt;br&gt;POST /analyze" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fdf2f8;strokeColor=#db2777;fontSize=10;" vertex="1" parent="lipsync_bg">
+      <mxGeometry x="10" y="32" width="160" height="40" as="geometry" />
+    </mxCell>
+    <mxCell id="lipsync_transformer" value="&lt;b&gt;cross_modal_transformer.py&lt;/b&gt;&lt;br&gt;Visual encoder: Conv3D → Transformer&lt;br&gt;Audio encoder: Conv1D → Transformer&lt;br&gt;Cross-attention: lip queries → audio&lt;br&gt;Cosine similarity → sync_score" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fdf2f8;strokeColor=#db2777;fontSize=10;" vertex="1" parent="lipsync_bg">
+      <mxGeometry x="10" y="82" width="160" height="90" as="geometry" />
+    </mxCell>
+    <mxCell id="lipsync_audio" value="&lt;b&gt;audio_processor.py&lt;/b&gt;&lt;br&gt;Mel-spectrogram + MFCCs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fdf2f8;strokeColor=#db2777;fontSize=10;" vertex="1" parent="lipsync_bg">
+      <mxGeometry x="10" y="182" width="160" height="38" as="geometry" />
+    </mxCell>
+    <mxCell id="lipsync_lip" value="&lt;b&gt;lip_tracker.py&lt;/b&gt;&lt;br&gt;MediaPipe mouth landmarks&lt;br&gt;32-frame lip ROI crops" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fdf2f8;strokeColor=#db2777;fontSize=10;" vertex="1" parent="lipsync_bg">
+      <mxGeometry x="185" y="32" width="180" height="55" as="geometry" />
+    </mxCell>
+    <mxCell id="lipsync_libs" value="&lt;b&gt;Libs:&lt;/b&gt; HuggingFace Transformers&lt;br&gt;Librosa · torchaudio · MediaPipe&lt;br&gt;&lt;b&gt;Output:&lt;/b&gt; sync_score [0–1]&lt;br&gt;flagged_segments, verdict" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff0f6;strokeColor=#db2777;fontSize=10;" vertex="1" parent="lipsync_bg">
+      <mxGeometry x="185" y="97" width="180" height="85" as="geometry" />
+    </mxCell>
+    <mxCell id="lipsync_docker" value="Dockerfile.lipsync" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#10b981;fontSize=10;" vertex="1" parent="lipsync_bg">
+      <mxGeometry x="185" y="192" width="180" height="30" as="geometry" />
+    </mxCell>
+
+    <!-- GPU note -->
+    <mxCell id="gpu_note" value="&lt;b&gt;GPU Inference:&lt;/b&gt; NVIDIA T4 (Modal.com / AWS EC2)&lt;br&gt;Deploy: Modal.com or AWS EC2 GPU" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=10;" vertex="1" parent="ml_bg">
+      <mxGeometry x="1200" y="80" width="0" height="0" as="geometry" />
+    </mxCell>
+
+    <!-- ===== SUPABASE CONTAINER ===== -->
+    <mxCell id="sb_bg" value="Supabase (Managed Cloud)" style="swimlane;startSize=30;fillColor=#f0fdf4;strokeColor=#16a34a;strokeWidth=2;fontStyle=1;fontSize=13;fontColor=#14532d;rounded=1;arcSize=4;" vertex="1" parent="1">
+      <mxGeometry x="1500" y="530" width="130" height="420" as="geometry" />
+    </mxCell>
+    <mxCell id="sb_auth" value="&lt;b&gt;Auth&lt;/b&gt;&lt;br&gt;Email/PW&lt;br&gt;Google OAuth&lt;br&gt;JWT tokens" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=10;" vertex="1" parent="sb_bg">
+      <mxGeometry x="10" y="40" width="110" height="70" as="geometry" />
+    </mxCell>
+    <mxCell id="sb_postgres" value="&lt;b&gt;PostgreSQL&lt;/b&gt;&lt;br&gt;analysis_jobs&lt;br&gt;analysis_results&lt;br&gt;RLS policies" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=10;" vertex="1" parent="sb_bg">
+      <mxGeometry x="10" y="120" width="110" height="75" as="geometry" />
+    </mxCell>
+    <mxCell id="sb_storage" value="&lt;b&gt;Storage&lt;/b&gt;&lt;br&gt;maven-videos&lt;br&gt;bucket (private)&lt;br&gt;Signed URLs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=10;" vertex="1" parent="sb_bg">
+      <mxGeometry x="10" y="205" width="110" height="70" as="geometry" />
+    </mxCell>
+    <mxCell id="sb_realtime" value="&lt;b&gt;Realtime&lt;/b&gt;&lt;br&gt;analysis_jobs&lt;br&gt;table changes&lt;br&gt;→ React UI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=10;" vertex="1" parent="sb_bg">
+      <mxGeometry x="10" y="285" width="110" height="70" as="geometry" />
+    </mxCell>
+    <mxCell id="sb_schema" value="&lt;b&gt;DB Schema:&lt;/b&gt;&lt;br&gt;analysis_jobs(id, user_id,&lt;br&gt;video_path, status, error)&lt;br&gt;analysis_results(id, job_id,&lt;br&gt;verdict, confidence, fft_score,&lt;br&gt;liveness_score, sync_score, details JSONB)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=10;align=left;" vertex="1" parent="sb_bg">
+      <mxGeometry x="10" y="365" width="110" height="0" as="geometry" />
+    </mxCell>
+
+    <!-- ===== DATA FLOW ARROWS ===== -->
+
+    <!-- User <-> Frontend -->
+    <mxCell id="e_user_fe" value="HTTP/S" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=10;" edge="1" source="user" target="fe_bg" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- Frontend <-> Nginx -->
+    <mxCell id="e_fe_nginx" value="REST / WebSocket" style="edgeStyle=orthogonalEdgeStyle;rounded=0;fontSize=10;strokeColor=#6c8ebf;" edge="1" source="fe_bg" target="nginx" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- Nginx <-> Backend -->
+    <mxCell id="e_nginx_be" value="Proxy :4000" style="edgeStyle=orthogonalEdgeStyle;rounded=0;fontSize=10;strokeColor=#9333ea;" edge="1" source="nginx" target="be_bg" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- Backend Orchestrator -> FFT -->
+    <mxCell id="e_be_fft" value="POST /analyze&lt;br&gt;(parallel)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;fontSize=10;strokeColor=#e11d48;" edge="1" source="be_orchestrator" target="fft_bg" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="690" y="760" />
+          <mxPoint x="420" y="760" />
+          <mxPoint x="420" y="850" />
+        </Array>
+      </mxGeometry>
+    </mxCell>
+
+    <!-- Backend Orchestrator -> Liveness -->
+    <mxCell id="e_be_liveness" value="POST /analyze&lt;br&gt;(parallel)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;fontSize=10;strokeColor=#e11d48;" edge="1" source="be_orchestrator" target="liveness_bg" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="690" y="760" />
+          <mxPoint x="770" y="760" />
+          <mxPoint x="770" y="850" />
+        </Array>
+      </mxGeometry>
+    </mxCell>
+
+    <!-- Backend Orchestrator -> LipSync -->
+    <mxCell id="e_be_lipsync" value="POST /analyze&lt;br&gt;(parallel)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;fontSize=10;strokeColor=#e11d48;" edge="1" source="be_orchestrator" target="lipsync_bg" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="690" y="760" />
+          <mxPoint x="1170" y="760" />
+          <mxPoint x="1170" y="850" />
+        </Array>
+      </mxGeometry>
+    </mxCell>
+
+    <!-- ML Services -> Backend (return scores) -->
+    <mxCell id="e_fft_be" value="artifact_score, HFR,&lt;br&gt;suspicious_frames" style="edgeStyle=orthogonalEdgeStyle;rounded=0;fontSize=9;strokeColor=#e11d48;dashed=1;" edge="1" source="fft_bg" target="be_aggregator" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="400" y="840" />
+          <mxPoint x="400" y="800" />
+          <mxPoint x="645" y="800" />
+          <mxPoint x="645" y="780" />
+        </Array>
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="e_liveness_be" value="liveness_score,&lt;br&gt;rPPG, blink" style="edgeStyle=orthogonalEdgeStyle;rounded=0;fontSize=9;strokeColor=#e11d48;dashed=1;" edge="1" source="liveness_bg" target="be_aggregator" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="780" y="840" />
+          <mxPoint x="780" y="800" />
+          <mxPoint x="645" y="800" />
+          <mxPoint x="645" y="780" />
+        </Array>
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="e_lipsync_be" value="sync_score,&lt;br&gt;flagged_segments" style="edgeStyle=orthogonalEdgeStyle;rounded=0;fontSize=9;strokeColor=#e11d48;dashed=1;" edge="1" source="lipsync_bg" target="be_aggregator" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="1170" y="840" />
+          <mxPoint x="1170" y="800" />
+          <mxPoint x="645" y="800" />
+          <mxPoint x="645" y="780" />
+        </Array>
+      </mxGeometry>
+    </mxCell>
+
+    <!-- Backend <-> Supabase -->
+    <mxCell id="e_be_sb_db" value="Read/Write jobs&lt;br&gt;&amp; results (SDK)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;fontSize=10;strokeColor=#16a34a;" edge="1" source="be_supabase_svc" target="sb_postgres" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="1490" y="718" />
+          <mxPoint x="1555" y="718" />
+        </Array>
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="e_be_sb_storage" value="Upload / signed URL" style="edgeStyle=orthogonalEdgeStyle;rounded=0;fontSize=10;strokeColor=#16a34a;" edge="1" source="be_supabase_svc" target="sb_storage" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="1490" y="718" />
+          <mxPoint x="1555" y="718" />
+        </Array>
+      </mxGeometry>
+    </mxCell>
+
+    <!-- Frontend <-> Supabase Auth -->
+    <mxCell id="e_fe_sb_auth" value="Auth (login/JWT)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;fontSize=10;strokeColor=#16a34a;dashed=1;" edge="1" source="fe_supabase_client" target="sb_auth" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="1440" y="350" />
+          <mxPoint x="1555" y="350" />
+          <mxPoint x="1555" y="565" />
+        </Array>
+      </mxGeometry>
+    </mxCell>
+
+    <!-- Supabase Realtime -> Frontend -->
+    <mxCell id="e_sb_rt_fe" value="Realtime push&lt;br&gt;(job status updates)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;fontSize=10;strokeColor=#16a34a;dashed=1;" edge="1" source="sb_realtime" target="fe_supabase_client" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="1555" y="820" />
+          <mxPoint x="1440" y="820" />
+          <mxPoint x="1440" y="350" />
+        </Array>
+      </mxGeometry>
+    </mxCell>
+
+    <!-- Socket.io -> Frontend -->
+    <mxCell id="e_socket_fe" value="Socket.io progress&lt;br&gt;analysis_complete" style="edgeStyle=orthogonalEdgeStyle;rounded=0;fontSize=10;strokeColor=#9333ea;dashed=1;" edge="1" source="be_socket" target="fe_hooks" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="760" y="595" />
+          <mxPoint x="760" y="400" />
+          <mxPoint x="370" y="400" />
+        </Array>
+      </mxGeometry>
+    </mxCell>
+
+    <!-- ===== TRAINING DATASETS PANEL ===== -->
+    <mxCell id="ds_bg" value="Training Datasets" style="swimlane;startSize=24;fillColor=#fffbeb;strokeColor=#d97706;fontSize=11;fontStyle=1;rounded=1;" vertex="1" parent="1">
+      <mxGeometry x="230" y="1170" width="1200" height="130" as="geometry" />
+    </mxCell>
+    <mxCell id="ds_ff" value="&lt;b&gt;FaceForensics++&lt;/b&gt;&lt;br&gt;FFT + Liveness&lt;br&gt;1000 videos × 4 methods" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=10;" vertex="1" parent="ds_bg">
+      <mxGeometry x="20" y="35" width="165" height="75" as="geometry" />
+    </mxCell>
+    <mxCell id="ds_celeb" value="&lt;b&gt;Celeb-DF v2&lt;/b&gt;&lt;br&gt;Generalization testing&lt;br&gt;6,229 clips" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=10;" vertex="1" parent="ds_bg">
+      <mxGeometry x="205" y="35" width="165" height="75" as="geometry" />
+    </mxCell>
+    <mxCell id="ds_dfdc" value="&lt;b&gt;DFDC&lt;/b&gt;&lt;br&gt;Real-world validation&lt;br&gt;100,000+ clips" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=10;" vertex="1" parent="ds_bg">
+      <mxGeometry x="390" y="35" width="165" height="75" as="geometry" />
+    </mxCell>
+    <mxCell id="ds_lrs3" value="&lt;b&gt;LRS3-TED&lt;/b&gt;&lt;br&gt;LipSync pre-train (real)&lt;br&gt;151,819 utterances" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=10;" vertex="1" parent="ds_bg">
+      <mxGeometry x="575" y="35" width="165" height="75" as="geometry" />
+    </mxCell>
+    <mxCell id="ds_timit" value="&lt;b&gt;DeepFakeTIMIT&lt;/b&gt;&lt;br&gt;LipSync fake training&lt;br&gt;620 videos" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=10;" vertex="1" parent="ds_bg">
+      <mxGeometry x="760" y="35" width="165" height="75" as="geometry" />
+    </mxCell>
+    <mxCell id="ds_asv" value="&lt;b&gt;ASVspoof 2019&lt;/b&gt;&lt;br&gt;Audio-only fake training&lt;br&gt;121,461 utterances" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=10;" vertex="1" parent="ds_bg">
+      <mxGeometry x="945" y="35" width="165" height="75" as="geometry" />
+    </mxCell>
+
+    <!-- ===== PERFORMANCE TARGETS PANEL ===== -->
+    <mxCell id="perf_bg" value="Performance Targets" style="swimlane;startSize=24;fillColor=#f0f9ff;strokeColor=#0284c7;fontSize=11;fontStyle=1;rounded=1;" vertex="1" parent="1">
+      <mxGeometry x="230" y="1320" width="1200" height="100" as="geometry" />
+    </mxCell>
+    <mxCell id="perf_auc1" value="AUC-ROC FaceForensics++&lt;br&gt;&lt;b&gt;&gt; 0.93&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=10;" vertex="1" parent="perf_bg">
+      <mxGeometry x="20" y="32" width="140" height="48" as="geometry" />
+    </mxCell>
+    <mxCell id="perf_auc2" value="AUC-ROC Celeb-DF v2&lt;br&gt;&lt;b&gt;&gt; 0.90&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=10;" vertex="1" parent="perf_bg">
+      <mxGeometry x="175" y="32" width="140" height="48" as="geometry" />
+    </mxCell>
+    <mxCell id="perf_eer" value="Equal Error Rate&lt;br&gt;&lt;b&gt;&lt; 8%&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=10;" vertex="1" parent="perf_bg">
+      <mxGeometry x="330" y="32" width="140" height="48" as="geometry" />
+    </mxCell>
+    <mxCell id="perf_fft" value="FFT layer accuracy&lt;br&gt;&lt;b&gt;&gt; 85%&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=10;" vertex="1" parent="perf_bg">
+      <mxGeometry x="485" y="32" width="140" height="48" as="geometry" />
+    </mxCell>
+    <mxCell id="perf_rppg" value="rPPG detection F1&lt;br&gt;&lt;b&gt;&gt; 80%&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=10;" vertex="1" parent="perf_bg">
+      <mxGeometry x="640" y="32" width="140" height="48" as="geometry" />
+    </mxCell>
+    <mxCell id="perf_lip" value="Lip-sync F1&lt;br&gt;&lt;b&gt;&gt; 87%&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=10;" vertex="1" parent="perf_bg">
+      <mxGeometry x="795" y="32" width="140" height="48" as="geometry" />
+    </mxCell>
+    <mxCell id="perf_api" value="API submit latency&lt;br&gt;&lt;b&gt;&lt; 500ms&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=10;" vertex="1" parent="perf_bg">
+      <mxGeometry x="950" y="32" width="140" height="48" as="geometry" />
+    </mxCell>
+    <mxCell id="perf_full" value="Full analysis (30s video)&lt;br&gt;&lt;b&gt;&lt; 60s&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=10;" vertex="1" parent="perf_bg">
+      <mxGeometry x="1105" y="32" width="75" height="48" as="geometry" />
+    </mxCell>
+
+    <!-- ===== DOCKER COMPOSE NOTE ===== -->
+    <mxCell id="docker_note" value="&lt;b&gt;docker-compose.yml&lt;/b&gt; — Services: backend:4000 · fft-service:8001 · liveness-service:8002 · lipsync-service:8003 · nginx:80" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#10b981;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="230" y="1440" width="1200" height="40" as="geometry" />
+    </mxCell>
+
+    <!-- ===== DATA FLOW LEGEND ===== -->
+    <mxCell id="legend_bg" value="Legend" style="swimlane;startSize=22;fillColor=#f9fafb;strokeColor=#6b7280;fontSize=11;fontStyle=1;rounded=1;" vertex="1" parent="1">
+      <mxGeometry x="1500" y="210" width="140" height="200" as="geometry" />
+    </mxCell>
+    <mxCell id="leg1" value="REST/HTTP call" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#6c8ebf;fontSize=9;endArrow=block;endFill=1;" edge="1" parent="legend_bg">
+      <mxGeometry x="10" y="40" width="100" height="10" as="geometry">
+        <Array as="points"/>
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="leg2" value="Async / return" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#e11d48;dashed=1;fontSize=9;endArrow=block;endFill=1;" edge="1" parent="legend_bg">
+      <mxGeometry x="10" y="75" width="100" height="10" as="geometry">
+        <Array as="points"/>
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="leg3" value="Realtime / Socket.io" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#9333ea;dashed=1;fontSize=9;endArrow=block;endFill=1;" edge="1" parent="legend_bg">
+      <mxGeometry x="10" y="110" width="100" height="10" as="geometry">
+        <Array as="points"/>
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="leg4" value="Supabase SDK" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#16a34a;fontSize=9;endArrow=block;endFill=1;" edge="1" parent="legend_bg">
+      <mxGeometry x="10" y="145" width="100" height="10" as="geometry">
+        <Array as="points"/>
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="leg5" value="Deploy target" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=9;" vertex="1" parent="legend_bg">
+      <mxGeometry x="20" y="168" width="100" height="22" as="geometry" />
+    </mxCell>
+
+    <!-- ===== SUPABASE Schema detail (moved to right) ===== -->
+    <mxCell id="sb_schema2" value="&lt;b&gt;analysis_jobs&lt;/b&gt;&lt;br&gt;id UUID PK&lt;br&gt;user_id UUID FK&lt;br&gt;video_path TEXT&lt;br&gt;status: PROCESSING|COMPLETED|FAILED&lt;br&gt;error TEXT&lt;br&gt;created_at / updated_at&lt;br&gt;&lt;br&gt;&lt;b&gt;analysis_results&lt;/b&gt;&lt;br&gt;id UUID PK&lt;br&gt;job_id UUID FK UNIQUE&lt;br&gt;verdict: REAL|FAKE|UNCERTAIN&lt;br&gt;confidence FLOAT&lt;br&gt;fft_score / liveness_score / sync_score FLOAT&lt;br&gt;details JSONB" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=9;align=left;" vertex="1" parent="1">
+      <mxGeometry x="1500" y="960" width="130" height="180" as="geometry" />
+    </mxCell>
+
+  </root>
+</mxGraphModel>

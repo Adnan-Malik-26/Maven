@@ -1,0 +1,88 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="MAVEN Architecture">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- FRONTEND -->
+        <mxCell id="frontend" value="React Frontend&#xa;Upload | Dashboard | Results | Explainability" style="rounded=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="400" y="40" width="300" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- NGINX -->
+        <mxCell id="nginx" value="Nginx Reverse Proxy" style="rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="420" y="140" width="260" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- BACKEND -->
+        <mxCell id="backend" value="Node.js / Express Backend&#xa;API Gateway | Auth | Job Queue | Aggregator&#xa;Socket.io | Supabase SDK" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="350" y="240" width="400" height="120" as="geometry"/>
+        </mxCell>
+
+        <!-- SUPABASE -->
+        <mxCell id="supabase" value="Supabase&#xa;PostgreSQL DB&#xa;Storage (Videos)&#xa;Auth&#xa;Realtime" style="rounded=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="800" y="240" width="260" height="120" as="geometry"/>
+        </mxCell>
+
+        <!-- ML SERVICES CONTAINER -->
+        <mxCell id="ml" value="Python ML Services (FastAPI)" style="rounded=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="300" y="420" width="500" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- FFT -->
+        <mxCell id="fft" value="FFT Service&#xa;Frequency Analysis&#xa;Spectral CNN" style="rounded=1;fillColor=#ffffff;strokeColor=#000000;" vertex="1" parent="ml">
+          <mxGeometry x="20" y="40" width="140" height="100" as="geometry"/>
+        </mxCell>
+
+        <!-- LIVENESS -->
+        <mxCell id="liveness" value="Liveness Service&#xa;rPPG + Blink&#xa;MediaPipe + Signal Processing" style="rounded=1;fillColor=#ffffff;strokeColor=#000000;" vertex="1" parent="ml">
+          <mxGeometry x="180" y="40" width="160" height="100" as="geometry"/>
+        </mxCell>
+
+        <!-- LIPSYNC -->
+        <mxCell id="lipsync" value="LipSync Service&#xa;Cross-modal Transformer&#xa;Audio-Visual Sync" style="rounded=1;fillColor=#ffffff;strokeColor=#000000;" vertex="1" parent="ml">
+          <mxGeometry x="360" y="40" width="140" height="100" as="geometry"/>
+        </mxCell>
+
+        <!-- DOCKER -->
+        <mxCell id="docker" value="Docker + docker-compose&#xa;Service Orchestration" style="rounded=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="350" y="680" width="400" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTIONS -->
+
+        <!-- Frontend -> Nginx -->
+        <mxCell id="edge1" style="endArrow=block;" edge="1" parent="1" source="frontend" target="nginx">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Nginx -> Backend -->
+        <mxCell id="edge2" value="REST / WebSocket" style="endArrow=block;" edge="1" parent="1" source="nginx" target="backend">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Backend -> Supabase -->
+        <mxCell id="edge3" value="Supabase SDK" style="endArrow=block;" edge="1" parent="1" source="backend" target="supabase">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Backend -> ML -->
+        <mxCell id="edge4" value="Internal HTTP (Parallel Calls)" style="endArrow=block;" edge="1" parent="1" source="backend" target="ml">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- ML -> Backend -->
+        <mxCell id="edge5" value="Scores + Metadata" style="endArrow=block;" edge="1" parent="1" source="ml" target="backend">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Backend -> Frontend -->
+        <mxCell id="edge6" value="Realtime Updates (Socket.io / Supabase)" style="endArrow=block;" edge="1" parent="1" source="backend" target="frontend">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

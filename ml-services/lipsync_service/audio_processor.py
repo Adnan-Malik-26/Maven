@@ -17,7 +17,7 @@ def extract_audio_features(video_path: str):
             # Return dummy empty array if no audio
             return np.zeros((1, 20))
             
-        video.audio.write_audiofile(temp_audio_path, logger=None, verbose=False)
+        video.audio.write_audiofile(temp_audio_path)
         
         # Load audio using librosa
         y, sr = librosa.load(temp_audio_path, sr=16000)

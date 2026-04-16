@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import logging
 import os
+import tempfile
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -215,18 +217,33 @@ def run_fft_analysis(
             frame_scores         — per-frame HFR list
             verdict              — "REAL" | "UNCERTAIN" | "FAKE"
     """
-    path = Path(video_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Video not found: {video_path}")
+    # ── Support remote URLs (e.g. Supabase signed/public URLs) ──────────────
+    _tmp_file = None
+    if video_path.startswith("http://") or video_path.startswith("https://"):
+        logger.info("Downloading video from URL: %s", video_path)
+        try:
+            suffix = ".mp4"
+            _tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+            urllib.request.urlretrieve(video_path, _tmp_file.name)
+            _tmp_file.close()
+            local_path = _tmp_file.name
+            logger.info("Downloaded to temp file: %s", local_path)
+        except Exception as exc:
+            raise FileNotFoundError(f"Failed to download video from URL: {exc}") from exc
+    else:
+        local_path = video_path
+        path = Path(video_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Video not found: {video_path}")
 
-    cap = cv2.VideoCapture(str(path))
+    cap = cv2.VideoCapture(local_path)
     if not cap.isOpened():
         raise ValueError(f"OpenCV could not open video: {video_path}")
 
     total_video_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     logger.info(
         "Opened video: %s | frames=%d fps=%.1f",
-        path.name,
+        local_path,
         total_video_frames,
         cap.get(cv2.CAP_PROP_FPS),
     )
@@ -288,16 +305,11 @@ def run_fft_analysis(
     # --- Aggregate ---
     scores_arr   = np.array(frame_scores, dtype=np.float32)
     mean_hfr     = float(np.mean(scores_arr))
-
-    # P75 weighted aggregate: slightly biases toward the worst frames
     p75          = float(np.percentile(scores_arr, 75))
     base_score   = 0.6 * mean_hfr + 0.4 * p75
-
-    # Apply temporal consistency factor
     tc_factor    = _temporal_consistency_factor(frame_scores)
     artifact_score = float(np.clip(base_score * tc_factor, 0.0, 1.0))
 
-    # Verdict
     if artifact_score > VERDICT_FAKE_THRESHOLD:
         verdict = "FAKE"
     elif artifact_score > VERDICT_UNCERTAIN_THRESHOLD:
@@ -307,13 +319,10 @@ def run_fft_analysis(
 
     logger.info(
         "FFT complete | frames=%d mean_hfr=%.4f artifact_score=%.4f verdict=%s",
-        frames_analyzed,
-        mean_hfr,
-        artifact_score,
-        verdict,
+        frames_analyzed, mean_hfr, artifact_score, verdict,
     )
 
-    return {
+    result = {
         "artifact_score":        round(artifact_score, 4),
         "high_freq_ratio":       round(mean_hfr, 4),
         "suspicious_frames":     suspicious_frames[:MAX_SUSPICIOUS_PAYLOAD],
@@ -321,3 +330,12 @@ def run_fft_analysis(
         "frame_scores":          [round(s, 4) for s in frame_scores[:200]],
         "verdict":               verdict,
     }
+
+    # Cleanup temp file downloaded from URL
+    if _tmp_file is not None:
+        try:
+            os.unlink(_tmp_file.name)
+        except Exception:
+            pass
+
+    return result

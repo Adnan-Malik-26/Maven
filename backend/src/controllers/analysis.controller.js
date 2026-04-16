@@ -37,7 +37,8 @@ async function submitVideo(req, res, next) {
         });
 
         // Run ML analysis in the background without awaiting it
-        runMLAnalysis(videoPath, analysisJob.id).catch((err) => {
+        // Use analysisJob.video_path which is the full public URL (not the raw storage path)
+        runMLAnalysis(analysisJob.video_path, analysisJob.id).catch((err) => {
             console.error("Background task error:", err);
         });
 

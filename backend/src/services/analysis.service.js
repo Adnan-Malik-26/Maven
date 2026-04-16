@@ -25,12 +25,17 @@ async function uploadVideoToStorage(fileBuffer, originalName, userId) {
  * @returns {Promise<Object>} The new job row
  */
 async function createAnalysisJob(userId, videoPath) {
-  // 1. Convert the internal videoPath into a full public URL
-  const { data: publicUrlData } = supabase.storage
+  // 1. Convert the internal videoPath into a downloadable signed URL
+  //    (the maven-videos bucket is private, so getPublicUrl won't work)
+  const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
     .from('maven-videos')
-    .getPublicUrl(videoPath);
+    .createSignedUrl(videoPath, 3600); // 1 hour expiry
 
-  const videoUrl = publicUrlData.publicUrl;
+  if (signedUrlError) {
+    throw new Error(`Failed to create signed URL: ${signedUrlError.message}`);
+  }
+
+  const videoUrl = signedUrlData.signedUrl;
 
   // 2. Insert into the database using supabaseAdmin to bypass backend RLS proxies
   const { data, error } = await supabaseAdmin
@@ -59,12 +64,18 @@ async function createAnalysisJob(userId, videoPath) {
  */
 async function saveAnalysisResult(jobId, verdict, rawResults) {
   // 1. Insert the result into the analysis_results table
+  // Map the aggregator output to the DB schema columns
   const { error: resultError } = await supabaseAdmin
     .from('analysis_results')
     .insert({
-      job_id: jobId,
-      verdict: verdict,
-      raw_results: rawResults
+      job_id:         jobId,
+      verdict:        rawResults.verdict  ?? verdict,
+      confidence:     rawResults.confidence ?? null,
+      fft_score:      rawResults.breakdown?.fft?.rawScore     ?? null,
+      liveness_score: rawResults.breakdown?.liveness?.rawScore ?? null,
+      sync_score:     rawResults.breakdown?.lipsync?.rawScore  ?? null,
+      // Store the full aggregator output in a JSONB column for the frontend
+      details:        rawResults,
     });
 
   if (resultError) {
@@ -94,8 +105,10 @@ async function saveAnalysisResult(jobId, verdict, rawResults) {
  */
 async function markJobFailed(jobId, errorMessage) {
 
-  const { data, error } = supabaseAdmin.from('analysis_jobs').eq('id', jobId)
-    .update({ status: "FAILED", error_message: errorMessage })
+  const { data, error } = await supabaseAdmin
+    .from('analysis_jobs')
+    .update({ status: 'FAILED', error_message: errorMessage })
+    .eq('id', jobId)
     .select()
     .single();
 
