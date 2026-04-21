@@ -70,3 +70,23 @@ It powers the core AI evaluation logic of the platform. By passing the safely up
 - **Parallel Fan-out Execution:** Passing an array of active `fetch` requests into a `Promise.all` immediately delegates them to the network asynchronously, stopping the backend from waiting 3 separate times cumulatively. 
 - **Non-blocking Request Handling:** The Express Controller deliberately sends a `202 Accepted` to the client browser and kicks off `runMLAnalysis().catch(...)` into the node event loop without wait locking. 
 - **Graceful Timeouts:** Node's `AbortController` throws an exception if the Python container freezes up past 120,000 milliseconds, ensuring pending database Jobs accurately mark themselves `FAILED`.
+
+---
+
+# Task Done 5: Real-Time Updates (Socket.io)
+
+## How the task was done
+1. Modified `src/app.js` to wrap the Express app within a native Node.js `httpServer`.
+2. Initialized a `Socket.io` server attached to the `httpServer` with configured CORS to allow real-time connections.
+3. Created a connection listener that uses the `jobId` to automatically place connected clients into specific Socket.io rooms (e.g., `job:<jobId>`).
+4. Updated `server.js` to listen using `httpServer.listen` instead of standard Express, booting the WebSocket listeners alongside the REST API.
+5. Integrated Socket.io broadcasts within `src/services/mlOrchestrator.js` to selectively emit `analysis_complete` or `analysis_failed` to specific job rooms once the ML pipeline resolves.
+6. Handled a scope related bug where block-scoped variables within try-catch blocks prevented proper broadcasting of failure events.
+7. Verified the comm-link by creating and running a standalone Node.js script using `socket.io-client`.
+
+## What it does
+It upgrades the backend from a standard request/response cycle to a persistent two-way communication channel. Instead of the frontend constantly polling the server to check if an uploaded video has finished processing, the server now instantly pushes the final result directly to the specific user the millisecond the verdict is calculated.
+
+## How it works (for the developer)
+- **Room-based Broadcasting:** By using `socket.join('job:' + jobId)`, the server isolates broadcasts natively. When `mlOrchestrator` concludes, it uses `io.to('job:' + jobId).emit(...)` to send the payload. This guarantees user A cannot receive user B's deepfake detection results, solving concurrency data leakage.
+- **Protocol Upgrading:** Setting up `createServer(app)` allows the backend server to natively answer standard HTTP web traffic and automatically upgrade supported client requests into continuous `ws://` TCP WebSocket connections using the same port.
