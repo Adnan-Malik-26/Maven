@@ -1,4 +1,5 @@
 const { supabase } = require('../services/supabase.service');
+const { logger } = require('../utils/logger');
 
 /**
  * Middleware to protect routes by verifying Supabase JWTs.
@@ -25,7 +26,7 @@ async function requireAuth(req, res, next) {
     req.user = user;
     next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
+    logger.error(`Auth middleware error: ${error.message}`);
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 }

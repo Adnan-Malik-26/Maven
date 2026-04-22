@@ -1,4 +1,5 @@
 const { supabase, supabaseAdmin } = require('./supabase.service');
+const { logger } = require('../utils/logger');
 
 /**
  * Sign up a new user with Supabase Auth.
@@ -30,7 +31,7 @@ async function signUp(email, password, firstName, lastName) {
     });
 
     if (dbError) {
-      console.error("Trigger bypass failed, couldn't insert into public.users:", dbError);
+      logger.error(`Trigger bypass failed, couldn't insert into public.users: ${dbError.message}`);
       throw new Error(`Failed to initialize user profile database: ${dbError.message}`);
     }
   }

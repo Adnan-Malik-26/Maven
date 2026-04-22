@@ -1,6 +1,7 @@
 const { computeFinalVerdict } = require('./aggregator');
 const { saveAnalysisResult, markJobFailed } = require('./analysis.service');
 const { getIO } = require('../socket.js');
+const { logger } = require('../utils/logger');
 
 // ML Service URLs (placeholders/config for now)
 const ML_SERVICES = {
@@ -67,7 +68,7 @@ async function runMLAnalysis(videoPath, jobId) {
         })
 
     } catch (error) {
-        console.error(`ML Analysis failed for job ${jobId}:`, error);
+        logger.error(`ML Analysis failed for job ${jobId}: ${error.message}`);
         // Mark job as failed in the DB so it doesn't get stuck in PROCESSING
         await markJobFailed(jobId, error.message);
         getIO().to(roomName).emit("analysis_failed", {

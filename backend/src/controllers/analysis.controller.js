@@ -1,5 +1,6 @@
 const { uploadVideoToStorage, createAnalysisJob } = require('../services/analysis.service');
 const { runMLAnalysis } = require('../services/mlOrchestrator');
+const { logger } = require('../utils/logger');
 
 async function submitVideo(req, res, next) {
 
@@ -42,16 +43,13 @@ async function submitVideo(req, res, next) {
         // Run ML analysis in the background without awaiting it
         // Use analysisJob.video_path which is the full public URL (not the raw storage path)
         runMLAnalysis(analysisJob.video_path, analysisJob.id).catch((err) => {
-            console.error("Background task error:", err);
+            logger.error(`Background task error: ${err.message}`);
         });
 
         return;
 
     } catch (err) {
-        return res.status(500).json({
-            message: "Internal Server Error",
-            error: err.message
-        });
+        next(err);
     }
 
 };

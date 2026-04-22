@@ -1,10 +1,20 @@
-
+const Joi = require('joi');
+const jobIdSchema = Joi.string().uuid().required();
 const { getJobWithResult, getUserJobHistory } = require('../services/analysis.service');
 
 
 async function getJobResult(req, res, next) {
     const { jobId } = req.params;
-    const userId = req.user.id;
+    const userId = req.user?.id;
+
+    // Validate jobId format before hitting the database.
+    const { error: ValidationError } = jobIdSchema.validate(jobId);
+
+    if (ValidationError) {
+        const err = new Error(`Invalid jobId: ${ValidationError.details[0].message}`);
+        err.statusCode = 400;
+        return next(err);
+    }
 
     try {
 
@@ -36,10 +46,7 @@ async function getJobResult(req, res, next) {
 
 
     } catch (error) {
-        return res.status(500).json({
-            message: "Internal Server Error",
-            error: error.message
-        });
+        next(error);
     }
 }
 
@@ -60,10 +67,7 @@ async function getJobHistory(req, res, next) {
         })
 
     } catch (err) {
-        return res.status(500).json({
-            message: "Internal Server Error",
-            error: err.message
-        });
+        next(err);
     }
 }
 
