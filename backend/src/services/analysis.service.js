@@ -68,14 +68,14 @@ async function saveAnalysisResult(jobId, verdict, rawResults) {
   const { error: resultError } = await supabaseAdmin
     .from('analysis_results')
     .insert({
-      job_id:         jobId,
-      verdict:        rawResults.verdict  ?? verdict,
-      confidence:     rawResults.confidence ?? null,
-      fft_score:      rawResults.breakdown?.fft?.rawScore     ?? null,
+      job_id: jobId,
+      verdict: rawResults.verdict ?? verdict,
+      confidence: rawResults.confidence ?? null,
+      fft_score: rawResults.breakdown?.fft?.rawScore ?? null,
       liveness_score: rawResults.breakdown?.liveness?.rawScore ?? null,
-      sync_score:     rawResults.breakdown?.lipsync?.rawScore  ?? null,
+      sync_score: rawResults.breakdown?.lipsync?.rawScore ?? null,
       // Store the full aggregator output in a JSONB column for the frontend
-      details:        rawResults,
+      details: rawResults,
     });
 
   if (resultError) {
@@ -124,8 +124,23 @@ async function markJobFailed(jobId, errorMessage) {
  * @param {string} userId - ID of the user
  * @returns {Promise<Object>} The joined job and result data
  */
+
+
+// function use it to check if the video analysis is completed or not.
+// if completed then return the result
+
 async function getJobWithResult(jobId, userId) {
-  // Logic here
+  const { data, error } = await supabaseAdmin.from('analysis_jobs')
+    .select('*, analysis_results(*)')
+    .eq('id', jobId)
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to get job with results: ${error.message}`);
+  }
+
+  return data;
 }
 
 /**
@@ -134,7 +149,16 @@ async function getJobWithResult(jobId, userId) {
  * @returns {Promise<Array>} Array of jobs
  */
 async function getUserJobHistory(userId) {
-  // Logic here
+  const { data, error } = await supabaseAdmin.from('analysis_jobs')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) {
+    throw new Error(`Failed to get user job history: ${error.message}`);
+  }
+  return data;
 }
 
 module.exports = {

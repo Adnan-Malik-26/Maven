@@ -1,8 +1,12 @@
-const express = require('express');
-const router  = express.Router();
+const { Router } = require("express");
 const { requireAuth } = require('../middleware/auth.middleware');
-const { getResult } = require('../controllers/results.controller');
+const { getJobResult, getJobHistory } = require('../controllers/results.controller');
 
-router.get('/:jobId', requireAuth, getResult);
+const router = Router();
 
-module.exports = router;
+
+router.get('/history', requireAuth, getJobHistory);
+router.get('/:jobId', requireAuth, getJobResult);
+
+
+module.exports = router
