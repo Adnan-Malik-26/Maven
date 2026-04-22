@@ -19,7 +19,7 @@ const io = new Server(httpServer, {
 setIO(io);
 
 io.on("connection", (socket) => {
-  logger.info(`Socket connected: ${socket.id}`);
+  console.log(`User connected: ${socket.id}`);
 
   socket.on("join_job", (jobId) => {
     if (!jobId) return;
@@ -31,7 +31,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    logger.info(`Socket disconnected: ${socket.id}`);
+    console.log(`User disconnected: ${socket.id}`);
   });
 });
 
@@ -57,13 +57,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// 404 catch-all (no route matched)
 app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' });
-});
+  res.status(404).json({ error: "Route not found" });
+})
 
-// Global error handler (MUST be last middleware)
-const { errorHandler } = require('./middleware/error.middleware.js');
+const errorHandler = require('./middleware/error.middleware.js');
 app.use(errorHandler);
 
 module.exports = {
