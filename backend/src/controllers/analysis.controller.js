@@ -3,7 +3,7 @@ const { runMLAnalysis } = require('../services/mlOrchestrator');
 
 async function submitVideo(req, res, next) {
 
-
+    // check if file is exist in req object
     if (!req.file) {
         return res.status(400).json({
             message: "No file uploaded"
@@ -11,13 +11,16 @@ async function submitVideo(req, res, next) {
     }
 
     try {
+        // extract user id from req object
         const userId = req.user?.id;
+
+        // extract file buffer from req object , buffer is raw data of file.
         const fileBuffer = req.file?.buffer;
 
-        // BUG FIX: Multer sets the property to 'originalname' (lowercase n)
+        // Multer sets the property to 'originalname' (lowercase n)
         const originalName = req.file?.originalname;
 
-        // OPTIMIZATION: Appending a timestamp prevents users from overwriting files with the same name
+        // Appending a timestamp prevents users from overwriting files with the same name
         const uniqueFileName = `${Date.now()}-${originalName}`;
         const videoPath = await uploadVideoToStorage(fileBuffer, uniqueFileName, userId);
 
