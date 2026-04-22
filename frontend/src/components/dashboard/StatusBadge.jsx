@@ -1,35 +1,35 @@
-import React from 'react';
-import { motion } from 'framer-motion';
+import { clsx } from 'clsx'
+import { CheckCircle, XCircle, Loader } from 'lucide-react'
 
-const STATUS_CONFIG = {
+const configs = {
   PROCESSING: {
-    label: 'Processing',
-    cls: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-    dot: 'bg-blue-400 animate-pulse',
+    label: 'Analyzing…',
+    icon: Loader,
+    className: 'bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400',
+    spin: true,
   },
   COMPLETED: {
     label: 'Completed',
-    cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    dot: 'bg-emerald-400',
+    icon: CheckCircle,
+    className: 'bg-green-50 dark:bg-green-500/15 text-green-700 dark:text-green-400',
+    spin: false,
   },
   FAILED: {
     label: 'Failed',
-    cls: 'bg-red-500/10 text-red-400 border-red-500/20',
-    dot: 'bg-red-400',
+    icon: XCircle,
+    className: 'bg-red-50 dark:bg-red-500/15 text-red-700 dark:text-red-400',
+    spin: false,
   },
-};
+}
 
 export default function StatusBadge({ status }) {
-  const cfg = STATUS_CONFIG[status] ?? {
-    label: status ?? 'Unknown',
-    cls: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
-    dot: 'bg-slate-400',
-  };
+  const cfg = configs[status] ?? configs.PROCESSING
+  const Icon = cfg.icon
 
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${cfg.cls}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+    <span className={clsx('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium', cfg.className)}>
+      <Icon size={12} className={clsx(cfg.spin && 'animate-spin')} />
       {cfg.label}
     </span>
-  );
+  )
 }

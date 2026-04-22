@@ -1,9 +1,28 @@
-fastapi>=0.103.0
-uvicorn>=0.23.2
-pydantic>=2.3.0
-opencv-python-headless>=4.8.0
-mediapipe>=0.10.3
-librosa>=0.10.1
-moviepy>=1.0.3
-numpy>=1.24.3
-scipy>=1.11.2
+# MAVEN LipSync Service — Python 3.12 required
+# All packages below have pre-built binary wheels for Python 3.12 on linux/x86_64.
+# Do NOT run this with Python 3.13+ (mediapipe, pydantic-core lack 3.13+ wheels).
+
+# Core API
+fastapi==0.110.0
+uvicorn[standard]==0.27.1
+pydantic==2.6.4
+python-multipart==0.0.9
+requests==2.31.0
+
+# Computer vision & face tracking
+opencv-python-headless==4.9.0.80
+mediapipe==0.10.33
+
+# Numerics
+numpy==1.26.4
+scipy==1.12.0
+
+# Deep learning (CPU wheel)
+torch==2.2.0
+torchaudio==2.2.0
+
+# Audio processing
+librosa==0.10.1
+
+# Image resizing for MFCC tensor preparation
+scikit-image==0.22.0

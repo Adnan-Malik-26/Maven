@@ -1,0 +1,23 @@
+# MAVEN Liveness Service — Python 3.12 required
+# All packages below have pre-built binary wheels for Python 3.12 on linux/x86_64.
+# Do NOT run this with Python 3.13+ — many packages (mediapipe, pydantic-core)
+# do not yet publish wheels for those versions.
+
+# Core API
+fastapi==0.110.0
+uvicorn[standard]==0.27.1
+pydantic==2.6.4
+python-multipart==0.0.9
+requests==2.31.0
+
+# Computer vision
+opencv-python-headless==4.9.0.80
+mediapipe==0.10.33
+
+# Numerics
+numpy==1.26.4
+scipy==1.12.0
+
+# Deep learning (CPU)
+torch==2.2.0
+librosa==0.10.1

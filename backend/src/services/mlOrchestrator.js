@@ -1,12 +1,10 @@
 const { computeFinalVerdict } = require('./aggregator');
 const { saveAnalysisResult, markJobFailed } = require('./analysis.service');
 
-// ML Service URLs — liveness defaults to null since service isn't implemented yet
 const ML_SERVICES = {
-    fft:      process.env.FFT_SERVICE_URL     || 'http://localhost:8001/analyze',
-    lipsync:  process.env.LIPSYNC_SERVICE_URL || 'http://localhost:8003/analyze',
-    // Liveness is optional — only called if a valid URL is configured
-    liveness: process.env.LIVENESS_SERVICE_URL,
+    fft:      process.env.FFT_SERVICE_URL      || 'http://localhost:8001/analyze',
+    lipsync:  process.env.LIPSYNC_SERVICE_URL  || 'http://localhost:8003/analyze',
+    liveness: process.env.LIVENESS_SERVICE_URL || 'http://localhost:8002/analyze',
 };
 
 /**
@@ -33,29 +31,43 @@ async function safeCall(url, name, requestOptions) {
 
 /**
  * Runs the ML analysis by calling all available Python services in parallel.
- * Liveness is optional — a neutral placeholder is used if the service is
- * not configured or unavailable, so FFT + LipSync can still produce a verdict.
  *
- * @param {string} videoPath
+ * IMPORTANT — payload shapes differ per service:
+ *   FFT service       → { video_path }          (reads from local path or URL)
+ *   Liveness service  → { video_url, job_id }   (downloads from signed URL)
+ *   LipSync service   → { video_url, job_id }   (downloads from signed URL)
+ *
+ * @param {string} videoPath  — signed Supabase Storage URL
  * @param {string} jobId
  */
 async function runMLAnalysis(videoPath, jobId) {
     try {
-        const controller  = new AbortController();
-        const timeoutId   = setTimeout(() => controller.abort(), 120000); // 2 min
+        const controller = new AbortController();
+        const timeoutId  = setTimeout(() => controller.abort(), 120000); // 2 min
 
-        const requestOptions = {
+        const commonOpts = {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ video_path: videoPath }),
             signal:  controller.signal,
         };
 
-        // Fan-out: run all available services in parallel
+        // FFT expects { video_path }
+        const fftOptions = {
+            ...commonOpts,
+            body: JSON.stringify({ video_path: videoPath }),
+        };
+
+        // Liveness + LipSync expect { video_url, job_id }
+        const videoUrlOptions = {
+            ...commonOpts,
+            body: JSON.stringify({ video_url: videoPath, job_id: jobId }),
+        };
+
+        // Fan-out: all services run in parallel
         const [fftResult, lipsyncResult, livenessResult] = await Promise.all([
-            safeCall(ML_SERVICES.fft,      'FFT',      requestOptions),
-            safeCall(ML_SERVICES.lipsync,  'LipSync',  requestOptions),
-            safeCall(ML_SERVICES.liveness, 'Liveness', requestOptions),
+            safeCall(ML_SERVICES.fft,      'FFT',      fftOptions),
+            safeCall(ML_SERVICES.lipsync,  'LipSync',  videoUrlOptions),
+            safeCall(ML_SERVICES.liveness, 'Liveness', videoUrlOptions),
         ]);
 
         clearTimeout(timeoutId);
@@ -65,10 +77,8 @@ async function runMLAnalysis(videoPath, jobId) {
             throw new Error('FFT service is required but failed or is not running.');
         }
 
-        // Lipsync fallback — neutral score if service unavailable
-        const resolvedLipsync = lipsyncResult ?? { sync_score: 0.5, verdict: 'UNKNOWN', _placeholder: true };
-
-        // Liveness fallback — neutral 0.5 score (not yet implemented)
+        // Neutral fallbacks when optional services are unavailable
+        const resolvedLipsync  = lipsyncResult  ?? { sync_score: 0.5, verdict: 'UNKNOWN', _placeholder: true };
         const resolvedLiveness = livenessResult ?? { liveness_score: 0.5, _placeholder: true };
 
         // Aggregate scores → final verdict
@@ -78,7 +88,7 @@ async function runMLAnalysis(videoPath, jobId) {
             lipsyncResult:   resolvedLipsync,
         });
 
-        // Attach per-service raw data for the frontend Result page
+        // Attach raw service outputs for the frontend Result page
         finalResult.fftResult      = fftResult;
         finalResult.lipsyncResult  = resolvedLipsync;
         finalResult.livenessResult = resolvedLiveness;

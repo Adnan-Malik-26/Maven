@@ -13,11 +13,13 @@ app.use((req, res, next) => {
   next();
 });
 // Import routes
-const authRoutes = require('./routes/auth.routes');
+const authRoutes     = require('./routes/auth.routes');
 const analysisRoutes = require('./routes/analysis.routes');
+const resultsRoutes  = require('./routes/results.routes');
 
-app.use('/api/auth', authRoutes);
+app.use('/api/auth',     authRoutes);
 app.use('/api/analysis', analysisRoutes);
+app.use('/api/results',  resultsRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });

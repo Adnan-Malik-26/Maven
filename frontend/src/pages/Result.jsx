@@ -1,378 +1,265 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { supabase } from '../lib/supabaseClient';
-import { useRealtime } from '../hooks/useRealtime';
-import VerdictCard from '../components/results/VerdictCard';
-import ScoreBreakdown from '../components/results/ScoreBreakdown';
-import SyncTimeline from '../components/results/SyncTimeline';
-import BlinkStats from '../components/results/BlinkStats';
-import RppgChart from '../components/results/RppgChart';
-import StatusBadge from '../components/dashboard/StatusBadge';
-import { Skeleton } from '../components/common/Loader';
-import { MavenSpinner } from '../components/common/Loader';
+import { useEffect, useState } from 'react'
+import { useParams, Link, useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import { ArrowLeft, Activity, Heart, Mic, Copy, Download, ChevronDown, XCircle } from 'lucide-react'
+import { clsx } from 'clsx'
+import { getResult } from '../services/api'
+import { useJobStatus } from '../hooks/useJobStatus'
+import VerdictCard from '../components/results/VerdictCard'
+import ScoreBreakdown from '../components/results/ScoreBreakdown'
+import SyncTimeline from '../components/results/SyncTimeline'
+import FrameScoreChart from '../components/results/FrameScoreChart'
+import LivenessStats from '../components/results/LivenessStats'
+import Loader from '../components/common/Loader'
 
-// ─── Extract raw result data from DB row ────────────────────────────────────
-// The aggregator stores its output in 'raw_results' JSONB col.
-// We defensively look in multiple places.
-function parseResultData(resultRow) {
-  if (!resultRow) return null;
-
-  // Prefer 'raw_results' (what the service actually writes)
-  const raw = resultRow.raw_results ?? resultRow.details ?? {};
-
-  return {
-    verdict:    resultRow.verdict    ?? raw.verdict    ?? 'UNCERTAIN',
-    confidence: resultRow.confidence ?? raw.confidence ?? null,
-    breakdown:  raw.breakdown        ?? null,
-    fftResult:    raw.breakdown?.fft      ? { ...raw } :
-                  (resultRow.fft_score != null ? {
-                    rawScore: resultRow.fft_score,
-                    unifiedFakeProb: resultRow.fft_score
-                  } : null),
-    livenessResult: null, // service not implemented yet
-    lipsyncResult:  raw.lipsyncResult ?? null,
-  };
-}
-
-// ─── FFT detail card ────────────────────────────────────────────────────────
-function FftCard({ fftData, breakdown }) {
-  const data = fftData
-    ?? (breakdown?.fft ? { artifact_score: breakdown.fft.rawScore, total_frames_analyzed: null } : null);
-  if (!data) return null;
-
-  const score = data.artifact_score ?? data.rawScore ?? breakdown?.fft?.rawScore;
-  const suspicious = data.suspicious_frames ?? [];
-  const totalFrames = data.total_frames_analyzed;
-
+// ── Processing state ──────────────────────────────────────────────────────
+function ProcessingState() {
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h4 className="text-sm font-bold text-slate-200">FFT Frequency Analysis</h4>
-          <p className="text-xs text-slate-500 mt-0.5">
-            High-frequency energy ratio across {totalFrames ? `${totalFrames} frames` : 'extracted frames'}
-          </p>
-        </div>
-        {score != null && (
-          <div className="text-right">
-            <p className={`text-xl font-black font-mono ${score > 0.65 ? 'text-red-400' : score > 0.40 ? 'text-amber-400' : 'text-emerald-400'}`}>
-              {Math.round(score * 100)}%
-            </p>
-            <p className="text-[10px] text-slate-500 uppercase tracking-wider">fake prob</p>
-          </div>
-        )}
-      </div>
-
-      {suspicious.length > 0 && (
-        <div>
-          <p className="label-sm mb-2">Suspicious frames ({suspicious.length})</p>
-          <div className="flex flex-wrap gap-1.5">
-            {suspicious.slice(0, 30).map((f) => (
-              <span
-                key={f}
-                className="px-2 py-0.5 rounded text-xs font-mono"
-                style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}
-              >
-                #{f}
-              </span>
-            ))}
-            {suspicious.length > 30 && (
-              <span className="text-xs text-slate-600 self-center">+{suspicious.length - 30} more</span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {suspicious.length === 0 && (
-        <div
-          className="flex items-center gap-2.5 px-4 py-3 rounded-xl"
-          style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)' }}
-        >
-          <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-          <p className="text-sm text-emerald-400">No suspicious frames detected above threshold.</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Raw JSON viewer ────────────────────────────────────────────────────────
-function RawDetails({ data }) {
-  const [expanded, setExpanded] = useState(false);
-  if (!data) return null;
-  return (
-    <div>
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-2 text-xs text-slate-600 hover:text-slate-400 transition-colors"
+    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="text-center space-y-8 max-w-sm"
       >
-        <svg
-          className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`}
-          fill="none" viewBox="0 0 24 24" stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        </svg>
-        {expanded ? 'Hide' : 'Show'} raw result data
+        {/* Triple rings */}
+        <div className="relative w-24 h-24 mx-auto">
+          {[0, 1, 2].map(i => (
+            <span
+              key={i}
+              className="absolute inset-0 rounded-full border-2 border-blue-500/30 animate-ping"
+              style={{ animationDelay: `${i * 0.4}s`, animationDuration: '1.8s' }}
+            />
+          ))}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Loader variant="spinner" size="md" />
+          </div>
+        </div>
+
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Analyzing your video…</h2>
+          <p className="text-slate-500 text-sm mt-2">Typically 30–90 seconds</p>
+        </div>
+
+        <div className="space-y-3 text-sm text-left">
+          {[
+            { icon: Activity, label: 'Frequency analysis',    color: 'text-blue-500' },
+            { icon: Heart,    label: 'Liveness detection',    color: 'text-violet-500' },
+            { icon: Mic,      label: 'Lip-sync verification', color: 'text-purple-500' },
+          ].map(({ icon: Icon, label, color }, i) => (
+            <div key={label} className="flex items-center gap-3 card px-4 py-3">
+              <Icon size={16} className={color} />
+              <span className="text-slate-700 dark:text-slate-300 flex-1">{label}</span>
+              <span className="flex gap-0.5">
+                {[0, 1, 2].map(j => (
+                  <span
+                    key={j}
+                    className={clsx('w-1.5 h-1.5 rounded-full animate-pulse', color === 'text-blue-500' ? 'bg-blue-500' : color === 'text-violet-500' ? 'bg-violet-500' : 'bg-purple-500')}
+                    style={{ animationDelay: `${(i * 3 + j) * 0.2}s` }}
+                  />
+                ))}
+              </span>
+            </div>
+          ))}
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ── Failed state ──────────────────────────────────────────────────────────
+function FailedState() {
+  return (
+    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-6">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="card border-red-200 dark:border-red-500/30 p-10 text-center max-w-sm space-y-4"
+      >
+        <XCircle size={40} className="text-red-500 mx-auto" />
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Analysis Failed</h2>
+        <p className="text-sm text-slate-500">An error occurred while processing your video.</p>
+        <Link to="/upload" className="btn-primary w-full justify-center">Try Again</Link>
+      </motion.div>
+    </div>
+  )
+}
+
+// ── Accordion ─────────────────────────────────────────────────────────────
+function Accordion({ title, badge, children }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="card overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between p-5 text-left hover:bg-slate-50 dark:hover:bg-dark-surface transition-colors"
+      >
+        <span className="font-semibold text-slate-900 dark:text-white text-sm flex items-center gap-2">
+          {title}
+          {badge && (
+            <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-dark-surface text-slate-500 text-xs font-mono">{badge}</span>
+          )}
+        </span>
+        <ChevronDown size={16} className={clsx('text-slate-400 transition-transform duration-200', open && 'rotate-180')} />
       </button>
-      {expanded && (
-        <motion.pre
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          className="mt-3 p-4 rounded-xl text-xs font-mono text-slate-400 overflow-auto max-h-72"
-          style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.06)' }}
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="px-5 pb-5 border-t border-slate-100 dark:border-dark-border pt-4"
         >
-          {JSON.stringify(data, null, 2)}
-        </motion.pre>
+          {children}
+        </motion.div>
       )}
     </div>
-  );
+  )
 }
 
-// ─── Loading skeleton ────────────────────────────────────────────────────────
-function ResultSkeleton() {
-  return (
-    <div className="space-y-6">
-      <Skeleton className="w-full h-40" />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 space-y-4">
-          <Skeleton className="w-full h-64" />
-          <Skeleton className="w-full h-40" />
-        </div>
-        <div className="space-y-4">
-          <Skeleton className="w-full h-48" />
-          <Skeleton className="w-full h-48" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Page ────────────────────────────────────────────────────────────────────
+// ── Main result page ──────────────────────────────────────────────────────
 export default function Result() {
-  const { jobId } = useParams();
-  const navigate  = useNavigate();
+  const { jobId }  = useParams()
+  const navigate   = useNavigate()
+  const jobStatus  = useJobStatus(jobId)
 
-  const [job,     setJob]     = useState(null);
-  const [result,  setResult]  = useState(null);
-  const [parsed,  setParsed]  = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState('');
+  const [result,  setResult]  = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [copied,  setCopied]  = useState(false)
 
-  // ── Fetch job + result ──────────────────────────────────────────────────
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Job row
-        const { data: jobData, error: jobErr } = await supabase
-          .from('analysis_jobs')
-          .select('*')
-          .eq('id', jobId)
-          .single();
-        if (jobErr) throw jobErr;
-        setJob(jobData);
+    if (jobStatus !== 'COMPLETED') return
+    setLoading(true)
+    getResult(jobId)
+      .then(({ data }) => setResult(data.result ?? data))
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [jobStatus, jobId])
 
-        // Result row
-        const { data: resultData, error: resultErr } = await supabase
-          .from('analysis_results')
-          .select('*')
-          .eq('job_id', jobId)
-          .maybeSingle();
-
-        if (resultErr && resultErr.code !== 'PGRST116') throw resultErr;
-        setResult(resultData);
-        setParsed(parseResultData(resultData));
-      } catch (e) {
-        setError(e.message || 'Failed to load result');
-      } finally {
-        setLoading(false);
-      }
-    };
-    if (jobId) fetchData();
-  }, [jobId]);
-
-  // ── Realtime — watch for job completion ─────────────────────────────────
-  useRealtime(jobId, (updatedJob) => {
-    setJob((prev) => ({ ...prev, ...updatedJob }));
-    if (updatedJob.status === 'COMPLETED') {
-      // Re-fetch the result after completion
-      supabase
-        .from('analysis_results')
-        .select('*')
-        .eq('job_id', jobId)
-        .maybeSingle()
-        .then(({ data }) => {
-          setResult(data);
-          setParsed(parseResultData(data));
-        });
-    }
-  });
-
-  // ────────────────────────────────────────────────────────────────────────
-  if (loading) return (
-    <div className="min-h-[calc(100vh-56px)] py-10 px-4">
-      <div className="max-w-6xl mx-auto"><ResultSkeleton /></div>
+  if (jobStatus === 'PROCESSING') return <ProcessingState />
+  if (jobStatus === 'FAILED')     return <FailedState />
+  if (loading || !result)         return (
+    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center">
+      <Loader variant="spinner" size="lg" />
     </div>
-  );
+  )
 
-  if (error) return (
-    <div className="min-h-[calc(100vh-56px)] flex items-center justify-center px-4">
-      <div className="glass p-8 text-center max-w-md">
-        <p className="text-red-400 font-semibold mb-2">Failed to load result</p>
-        <p className="text-slate-500 text-sm mb-6">{error}</p>
-        <Link to="/dashboard" className="btn-primary">Back to dashboard</Link>
-      </div>
-    </div>
-  );
+  const fft      = result.details?.fftResult      ?? {}
+  const liveness = result.details?.livenessResult ?? {}
+  const lipsync  = result.details?.lipsyncResult  ?? {}
 
-  const isProcessing = job?.status === 'PROCESSING';
-  const isFailed     = job?.status === 'FAILED';
+  const layers = [
+    {
+      label: 'FFT Frequency',
+      icon:  Activity,
+      score: 1 - (result.fft_score ?? 0),
+      description: `${fft.total_frames_analyzed ?? 0} frames analyzed · ${fft.suspicious_frames?.length ?? 0} suspicious frames`,
+    },
+    {
+      label: 'Physiological Liveness',
+      icon:  Heart,
+      score: result.liveness_score ?? 0,
+      description: liveness.rppg?.pulse_present ? `HR ~${liveness.rppg.estimated_hr_bpm?.toFixed(0)} BPM · ${liveness.blink?.blink_count ?? 0} blinks` : 'No pulse signal detected',
+    },
+    {
+      label: 'Audio-Visual Sync',
+      icon:  Mic,
+      score: result.sync_score ?? 0,
+      description: `${lipsync.windows_analyzed ?? 0} windows scored · verdict: ${lipsync.verdict ?? '—'}`,
+    },
+  ]
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(window.location.href)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const downloadReport = () => {
+    const lines = [
+      'MAVEN Forensic Analysis Report',
+      '================================',
+      `Job ID:     ${jobId}`,
+      `Verdict:    ${result.verdict}`,
+      `Confidence: ${((result.confidence ?? 0) * 100).toFixed(1)}%`,
+      '',
+      'Score Breakdown:',
+      `  FFT Score:      ${((1 - (result.fft_score ?? 0)) * 100).toFixed(1)}% authentic`,
+      `  Liveness Score: ${((result.liveness_score ?? 0) * 100).toFixed(1)}% alive`,
+      `  Sync Score:     ${((result.sync_score ?? 0) * 100).toFixed(1)}% in-sync`,
+      '',
+      `Generated: ${new Date().toISOString()}`,
+    ]
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `maven-report-${jobId.slice(0, 8)}.txt`
+    a.click()
+  }
 
   return (
-    <div className="min-h-[calc(100vh-56px)] py-10 px-4">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-[calc(100vh-64px)] px-6 py-10">
+      <div className="max-w-3xl mx-auto space-y-6">
 
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm text-slate-500">
-          <Link to="/dashboard" className="hover:text-slate-300 transition-colors">Dashboard</Link>
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-          <span className="text-slate-400">Result</span>
-          <span className="font-mono text-xs">· {jobId?.slice(0, 8)}…</span>
-          <StatusBadge status={job?.status} />
+        {/* Back */}
+        <button onClick={() => navigate(-1)} className="btn-ghost gap-1.5 text-sm -ml-2">
+          <ArrowLeft size={15} /> Back
+        </button>
+
+        {/* Verdict */}
+        <VerdictCard verdict={result.verdict} confidence={result.confidence} />
+
+        {/* Score breakdown + radar */}
+        <ScoreBreakdown result={result} layers={layers} />
+
+        {/* Liveness stats */}
+        {(liveness.rppg || liveness.blink) && (
+          <LivenessStats rppg={liveness.rppg} blink={liveness.blink} />
+        )}
+
+        {/* Frame score chart */}
+        {fft.frame_scores?.length > 0 && (
+          <FrameScoreChart frameScores={fft.frame_scores} />
+        )}
+
+        {/* Sync timeline */}
+        {lipsync.flagged_segments?.length > 0 && (
+          <SyncTimeline
+            segments={lipsync.flagged_segments}
+            totalDuration={lipsync.windows_analyzed ? lipsync.windows_analyzed / 25 : 30}
+          />
+        )}
+
+        {/* FFT heatmap */}
+        {result.spectrum_url && (
+          <div className="card p-6 space-y-3">
+            <h3 className="section-title text-lg">FFT Spectrum Heatmap</h3>
+            <img src={result.spectrum_url} alt="FFT heatmap" className="w-full rounded-xl" />
+            <p className="text-xs text-slate-400">High-frequency energy distribution across analyzed frames</p>
+          </div>
+        )}
+
+        {/* Suspicious frames accordion */}
+        {fft.suspicious_frames?.length > 0 && (
+          <Accordion title="Suspicious Frames" badge={fft.suspicious_frames.length}>
+            <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+              {fft.suspicious_frames.map((f, i) => (
+                <span key={i} className="font-mono text-xs bg-slate-100 dark:bg-dark-surface text-slate-600 dark:text-slate-400 px-2 py-1 rounded">
+                  #{f}
+                </span>
+              ))}
+            </div>
+          </Accordion>
+        )}
+
+        {/* Share / Export */}
+        <div className="flex items-center gap-3 pt-2">
+          <button onClick={copyLink} className="btn-secondary text-sm py-2 gap-2">
+            <Copy size={14} /> {copied ? 'Copied!' : 'Copy Result Link'}
+          </button>
+          <button onClick={downloadReport} className="btn-secondary text-sm py-2 gap-2">
+            <Download size={14} /> Download Report
+          </button>
         </div>
 
-        {/* ── Still processing ── */}
-        {isProcessing && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="glass p-12 flex flex-col items-center gap-5 text-center"
-          >
-            <MavenSpinner size={48} />
-            <div>
-              <p className="text-slate-200 font-semibold">Analysis in progress</p>
-              <p className="text-slate-500 text-sm mt-1">This page will update automatically when results are ready.</p>
-            </div>
-          </motion.div>
-        )}
-
-        {/* ── Failed ── */}
-        {isFailed && (
-          <div className="glass p-8 text-center">
-            <p className="text-red-400 font-bold text-lg mb-1">Analysis Failed</p>
-            <p className="text-slate-500 text-sm mb-2">{job?.error_message || 'An unexpected error occurred during ML analysis.'}</p>
-            <p className="text-xs text-slate-600 mb-6">
-              The liveness microservice is not yet implemented and may have caused this failure.
-            </p>
-            <Link to="/upload" className="btn-primary">Try again</Link>
-          </div>
-        )}
-
-        {/* ── Results ── */}
-        {!isProcessing && !isFailed && parsed && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.4 }}
-            className="space-y-5"
-          >
-            {/* Verdict */}
-            <VerdictCard verdict={parsed.verdict} confidence={parsed.confidence} />
-
-            {/* Main 2-col layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-
-              {/* Left: score breakdown + FFT + sync */}
-              <div className="lg:col-span-2 space-y-5">
-
-                {/* Score breakdown */}
-                {parsed.breakdown && (
-                  <div className="glass p-6">
-                    <ScoreBreakdown breakdown={parsed.breakdown} />
-                  </div>
-                )}
-
-                {/* FFT details */}
-                <div className="glass p-6">
-                  <FftCard
-                    fftData={result?.raw_results?.fftResult ?? result?.details?.fftResult}
-                    breakdown={parsed.breakdown}
-                  />
-                </div>
-
-                {/* Lip-sync timeline */}
-                {(result?.raw_results?.lipsyncResult ?? result?.details?.lipsyncResult) && (
-                  <div className="glass p-6">
-                    <SyncTimeline
-                      lipsyncResult={result.raw_results?.lipsyncResult ?? result.details?.lipsyncResult}
-                    />
-                  </div>
-                )}
-
-                {/* Raw data */}
-                <div className="glass p-6">
-                  <RawDetails data={result} />
-                </div>
-              </div>
-
-              {/* Right: liveness (coming soon) */}
-              <div className="space-y-5">
-                {/* Liveness header */}
-                <div className="glass p-5">
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className="text-lg">👁️</span>
-                    <div>
-                      <p className="text-sm font-bold text-slate-200">Liveness Detection</p>
-                      <p className="text-xs text-slate-500">Layer 2 · Weight: 40%</p>
-                    </div>
-                  </div>
-                  <RppgChart />
-                </div>
-                <BlinkStats />
-
-                {/* Job metadata */}
-                <div className="glass p-5 space-y-3">
-                  <p className="label-sm">Job info</p>
-                  <div className="space-y-2 text-xs font-mono">
-                    {[
-                      ['Job ID',     jobId?.slice(0, 8) + '…'],
-                      ['Submitted', job?.created_at ? new Date(job.created_at).toLocaleString() : '—'],
-                      ['Status',    job?.status],
-                    ].map(([k, v]) => (
-                      <div key={k} className="flex justify-between gap-4">
-                        <span className="text-slate-600">{k}</span>
-                        <span className="text-slate-400 text-right truncate max-w-[120px]">{v}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex flex-wrap gap-3">
-              <Link to="/upload" className="btn-primary">
-                Analyse another video
-              </Link>
-              <Link to="/dashboard" className="btn-secondary">
-                Back to dashboard
-              </Link>
-            </div>
-          </motion.div>
-        )}
-
-        {/* No result data yet but job exists */}
-        {!isProcessing && !isFailed && !parsed && (
-          <div className="glass p-8 text-center">
-            <p className="text-slate-400 text-sm">No result data found for this job.</p>
-            <Link to="/dashboard" className="btn-ghost mt-4">Back to dashboard</Link>
-          </div>
-        )}
       </div>
     </div>
-  );
+  )
 }

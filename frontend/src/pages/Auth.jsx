@@ -1,313 +1,241 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '../context/AuthContext';
-import Alert from '../components/common/Alert';
-import { MavenSpinner } from '../components/common/Loader';
+import { useState } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react'
+import { clsx } from 'clsx'
+import { supabase } from '../lib/supabaseClient'
 
-function Input({ label, id, type = 'text', value, onChange, placeholder, autoComplete }) {
-  const [show, setShow] = useState(false);
-  const isPassword = type === 'password';
-
+function PasswordStrength({ password }) {
+  const score = [/.{8,}/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/]
+    .filter(r => r.test(password)).length
+  const labels = ['', 'Weak', 'Fair', 'Good', 'Strong']
+  const colors = ['', 'bg-red-500', 'bg-amber-500', 'bg-blue-500', 'bg-green-500']
+  if (!password) return null
   return (
-    <div className="space-y-1.5">
-      <label htmlFor={id} className="block text-xs font-semibold text-slate-400">{label}</label>
-      <div className="relative">
-        <input
-          id={id}
-          type={isPassword && show ? 'text' : type}
-          value={value}
-          onChange={onChange}
-          placeholder={placeholder}
-          autoComplete={autoComplete}
-          className="input-field"
-        />
-        {isPassword && (
-          <button
-            type="button"
-            onClick={() => setShow((v) => !v)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
-          >
-            {show ? (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            )}
-          </button>
-        )}
+    <div className="space-y-1 mt-1">
+      <div className="flex gap-1">
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} className={clsx('h-1 flex-1 rounded-full transition-all duration-300', i <= score ? colors[score] : 'bg-slate-200 dark:bg-dark-border')} />
+        ))}
       </div>
+      <p className="text-xs text-slate-400">{labels[score]}</p>
     </div>
-  );
+  )
 }
 
-// ─── Login form ───────────────────────────────────────────────────────────────
-function LoginForm({ onSuccess, onSwitch }) {
-  const { login } = useAuth();
-  const [email,    setEmail]    = useState('');
-  const [password, setPassword] = useState('');
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState('');
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    try {
-      await login(email, password);
-      onSuccess();
-    } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Login failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      <Alert type="error" message={error} />
-      <Input label="Email address" id="login-email" type="email" value={email}
-        onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" />
-      <Input label="Password" id="login-password" type="password" value={password}
-        onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoComplete="current-password" />
-
-      <div className="text-right">
-        <Link to="/auth?tab=reset" className="text-xs text-slate-500 hover:text-brand-400 transition-colors">
-          Forgot password?
-        </Link>
-      </div>
-
-      <button type="submit" disabled={loading || !email || !password} className="btn-primary w-full py-3">
-        {loading ? <MavenSpinner size={18} /> : 'Sign in'}
-      </button>
-
-      <p className="text-center text-sm text-slate-500">
-        Don't have an account?{' '}
-        <button type="button" onClick={onSwitch} className="text-brand-400 hover:text-brand-300 font-medium">
-          Create account
-        </button>
-      </p>
-    </form>
-  );
-}
-
-// ─── Signup form ──────────────────────────────────────────────────────────────
-function SignupForm({ onSuccess, onSwitch }) {
-  const { signup } = useAuth();
-  const [firstName, setFirstName] = useState('');
-  const [lastName,  setLastName]  = useState('');
-  const [email,     setEmail]     = useState('');
-  const [password,  setPassword]  = useState('');
-  const [loading,   setLoading]   = useState(false);
-  const [error,     setError]     = useState('');
-  const [info,      setInfo]      = useState('');
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(''); setInfo('');
-    if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
-    setLoading(true);
-    try {
-      const { session } = await signup(email, password, firstName, lastName);
-      if (session) {
-        onSuccess();
-      } else {
-        setInfo('Account created! Please check your email to confirm before signing in.');
-      }
-    } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Signup failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <Alert type="error"   message={error} />
-      <Alert type="success" message={info} />
-      <div className="grid grid-cols-2 gap-3">
-        <Input label="First name" id="signup-first" type="text" value={firstName}
-          onChange={(e) => setFirstName(e.target.value)} placeholder="Ada" autoComplete="given-name" />
-        <Input label="Last name" id="signup-last" type="text" value={lastName}
-          onChange={(e) => setLastName(e.target.value)} placeholder="Lovelace" autoComplete="family-name" />
-      </div>
-      <Input label="Email address" id="signup-email" type="email" value={email}
-        onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" />
-      <Input label="Password" id="signup-password" type="password" value={password}
-        onChange={(e) => setPassword(e.target.value)} placeholder="min. 6 characters" autoComplete="new-password" />
-
-      <button type="submit" disabled={loading || !email || !password || !firstName} className="btn-primary w-full py-3">
-        {loading ? <MavenSpinner size={18} /> : 'Create account'}
-      </button>
-
-      <p className="text-center text-sm text-slate-500">
-        Already have an account?{' '}
-        <button type="button" onClick={onSwitch} className="text-brand-400 hover:text-brand-300 font-medium">
-          Sign in
-        </button>
-      </p>
-    </form>
-  );
-}
-
-// ─── Reset password form ──────────────────────────────────────────────────────
-function ResetForm({ onBack }) {
-  const { resetPassword } = useAuth();
-  const [email,   setEmail]   = useState('');
-  const [loading, setLoading] = useState(false);
-  const [sent,    setSent]    = useState(false);
-  const [error,   setError]   = useState('');
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    try {
-      await resetPassword(email);
-      setSent(true);
-    } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to send reset email');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      <Alert type="error" message={error} />
-      {sent ? (
-        <Alert type="success" message={`Password reset link sent to ${email}. Check your inbox.`} />
-      ) : (
-        <Input label="Email address" id="reset-email" type="email" value={email}
-          onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" />
-      )}
-      {!sent && (
-        <button type="submit" disabled={loading || !email} className="btn-primary w-full py-3">
-          {loading ? <MavenSpinner size={18} /> : 'Send reset link'}
-        </button>
-      )}
-      <p className="text-center">
-        <button type="button" onClick={onBack} className="text-xs text-slate-500 hover:text-brand-400 transition-colors">
-          ← Back to sign in
-        </button>
-      </p>
-    </form>
-  );
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
 export default function Auth() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const location   = useLocation();
-  const navigate   = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate()
+  const location = useLocation()
+  const from = location.state?.from?.pathname || '/dashboard'
 
-  const tab = searchParams.get('tab') ?? 'login';
+  const [tab,     setTab]     = useState('signin')
+  const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState('')
+  const [success, setSuccess] = useState('')
+  const [showPw,  setShowPw]  = useState(false)
+  const [forgot,  setForgot]  = useState(false)
 
-  const setTab = (t) => setSearchParams({ tab: t }, { replace: true });
+  const [form, setForm] = useState({ email: '', password: '', confirm: '' })
+  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
 
-  // Redirect if already logged in
-  useEffect(() => {
-    if (isAuthenticated) {
-      const from = location.state?.from?.pathname ?? '/dashboard';
-      navigate(from, { replace: true });
-    }
-  }, [isAuthenticated, navigate, location]);
+  const handleSignIn = async (e) => {
+    e.preventDefault()
+    setError('')
+    if (!form.email || !form.password) return setError('Please fill in all fields.')
+    setLoading(true)
+    const { error: err } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password })
+    setLoading(false)
+    if (err) return setError(err.message)
+    navigate(from, { replace: true })
+  }
 
-  const handleSuccess = () => {
-    const from = location.state?.from?.pathname ?? '/dashboard';
-    navigate(from, { replace: true });
-  };
+  const handleSignUp = async (e) => {
+    e.preventDefault()
+    setError('')
+    if (!form.email || !form.password) return setError('Please fill in all fields.')
+    if (form.password !== form.confirm) return setError('Passwords do not match.')
+    if (form.password.length < 6) return setError('Password must be at least 6 characters.')
+    setLoading(true)
+    const { error: err } = await supabase.auth.signUp({ email: form.email, password: form.password })
+    setLoading(false)
+    if (err) return setError(err.message)
+    setSuccess('Check your email for a confirmation link!')
+  }
+
+  const handleReset = async (e) => {
+    e.preventDefault()
+    setError('')
+    if (!form.email) return setError('Please enter your email.')
+    setLoading(true)
+    const { error: err } = await supabase.auth.resetPasswordForEmail(form.email, {
+      redirectTo: `${window.location.origin}/auth`,
+    })
+    setLoading(false)
+    if (err) return setError(err.message)
+    setSuccess('Password reset link sent to your email.')
+  }
+
+  const handleGoogle = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}${from}` },
+    })
+  }
 
   return (
-    <div className="min-h-[calc(100vh-56px)] flex items-center justify-center px-4 py-16">
-      {/* Ambient glow */}
-      <div
-        className="fixed top-1/4 left-1/2 -translate-x-1/2 w-[500px] h-[500px] rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse, rgba(139,92,246,0.08) 0%, transparent 70%)', filter: 'blur(60px)' }}
-      />
+    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4 py-12 relative overflow-hidden">
+      {/* Background orbs */}
+      <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full bg-blue-500/10 dark:bg-blue-600/8 blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-0 right-1/4 w-80 h-80 rounded-full bg-violet-500/10 dark:bg-violet-600/8 blur-[100px] pointer-events-none" />
 
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md"
+        transition={{ duration: 0.4 }}
+        className="relative w-full max-w-md"
       >
-        {/* Logo */}
+        {/* Logo mark */}
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2.5 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-brand-600 flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
-                  d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
-              </svg>
-            </div>
-            <span className="font-black text-xl tracking-widest uppercase">MAVEN</span>
-          </Link>
-          <h1 className="text-2xl font-bold text-white">
-            {tab === 'signup' ? 'Create your account' :
-             tab === 'reset'  ? 'Reset your password' :
-             'Welcome back'}
-          </h1>
-          <p className="text-slate-500 text-sm mt-1">
-            {tab === 'signup' ? 'Start detecting deepfakes for free' :
-             tab === 'reset'  ? "We'll send you a recovery link" :
-             'Sign in to continue to MAVEN'}
-          </p>
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white font-black text-xl mx-auto mb-3">M</div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Welcome to MAVEN</h1>
+          <p className="text-sm text-slate-500 mt-1">Deepfake forensics platform</p>
         </div>
 
-        {/* Card */}
-        <div className="glass p-7 space-y-6">
-          {/* Tab switcher (login / signup only) */}
-          {tab !== 'reset' && (
-            <div className="flex rounded-xl p-1" style={{ background: 'rgba(255,255,255,0.04)' }}>
-              {[['login', 'Sign in'], ['signup', 'Create account']].map(([t, l]) => (
+        <div className="card-glass dark:card-glass bg-white dark:bg-dark-card/80 border border-slate-200 dark:border-dark-border rounded-2xl p-8 shadow-xl backdrop-blur-xl">
+
+          {/* Tabs */}
+          {!forgot && (
+            <div className="flex relative mb-8 bg-slate-100 dark:bg-dark-surface rounded-xl p-1">
+              {['signin', 'signup'].map(t => (
                 <button
                   key={t}
-                  onClick={() => setTab(t)}
-                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                    tab === t ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'
-                  }`}
+                  onClick={() => { setTab(t); setError(''); setSuccess('') }}
+                  className={clsx(
+                    'flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-200 relative z-10',
+                    tab === t ? 'text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                  )}
                 >
-                  {l}
+                  {t === 'signin' ? 'Sign In' : 'Sign Up'}
+                  {tab === t && (
+                    <motion.div
+                      layoutId="tab-bg"
+                      className="absolute inset-0 bg-white dark:bg-dark-card rounded-lg shadow-sm -z-10"
+                    />
+                  )}
                 </button>
               ))}
             </div>
           )}
 
-          {/* Forms */}
-          <AnimatePresence mode="wait">
-            {tab === 'login' && (
-              <motion.div key="login"
-                initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 8 }} transition={{ duration: 0.2 }}>
-                <LoginForm onSuccess={handleSuccess} onSwitch={() => setTab('signup')} />
+          {/* Success */}
+          <AnimatePresence>
+            {success && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="flex items-center gap-2 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 rounded-xl px-4 py-3 text-sm mb-4"
+              >
+                <CheckCircle size={15} /> {success}
               </motion.div>
             )}
-            {tab === 'signup' && (
-              <motion.div key="signup"
-                initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.2 }}>
-                <SignupForm onSuccess={handleSuccess} onSwitch={() => setTab('login')} />
-              </motion.div>
-            )}
-            {tab === 'reset' && (
-              <motion.div key="reset"
-                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
-                <ResetForm onBack={() => setTab('login')} />
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="flex items-center gap-2 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl px-4 py-3 text-sm mb-4"
+              >
+                <AlertCircle size={15} /> {error}
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Forgot Password */}
+          {forgot ? (
+            <form onSubmit={handleReset} className="space-y-4">
+              <div>
+                <h2 className="text-lg font-bold mb-1 text-slate-900 dark:text-white">Reset Password</h2>
+                <p className="text-sm text-slate-500 mb-4">Enter your email and we'll send a reset link.</p>
+                <div className="relative">
+                  <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input type="email" placeholder="Email" value={form.email} onChange={set('email')} className="input pl-10" />
+                </div>
+              </div>
+              <button type="submit" disabled={loading} className="btn-primary w-full">
+                {loading ? 'Sending…' : 'Send Reset Link'}
+              </button>
+              <button type="button" onClick={() => { setForgot(false); setError(''); setSuccess('') }} className="btn-ghost w-full text-sm">
+                Back to Sign In
+              </button>
+            </form>
+          ) : tab === 'signin' ? (
+            <form onSubmit={handleSignIn} className="space-y-4">
+              <div className="relative">
+                <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input type="email" placeholder="Email" value={form.email} onChange={set('email')} className="input pl-10" />
+              </div>
+              <div className="relative">
+                <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input type={showPw ? 'text' : 'password'} placeholder="Password" value={form.password} onChange={set('password')} className="input pl-10 pr-10" />
+                <button type="button" onClick={() => setShowPw(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                  {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+              <div className="flex justify-end">
+                <button type="button" onClick={() => { setForgot(true); setError(''); setSuccess('') }} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                  Forgot password?
+                </button>
+              </div>
+              <button type="submit" disabled={loading} className="btn-primary w-full">
+                {loading ? 'Signing in…' : 'Sign In'}
+              </button>
+              <div className="relative flex items-center gap-3 my-2">
+                <div className="flex-1 h-px bg-slate-200 dark:bg-dark-border" />
+                <span className="text-xs text-slate-400">or</span>
+                <div className="flex-1 h-px bg-slate-200 dark:bg-dark-border" />
+              </div>
+              <button type="button" onClick={handleGoogle} className="btn-secondary w-full gap-3">
+                <svg className="w-4 h-4" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                Continue with Google
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleSignUp} className="space-y-4">
+              <div className="relative">
+                <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input type="email" placeholder="Email" value={form.email} onChange={set('email')} className="input pl-10" />
+              </div>
+              <div>
+                <div className="relative">
+                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input type={showPw ? 'text' : 'password'} placeholder="Password" value={form.password} onChange={set('password')} className="input pl-10 pr-10" />
+                  <button type="button" onClick={() => setShowPw(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+                <PasswordStrength password={form.password} />
+              </div>
+              <div className="relative">
+                <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input type="password" placeholder="Confirm password" value={form.confirm} onChange={set('confirm')} className="input pl-10" />
+              </div>
+              <button type="submit" disabled={loading} className="btn-primary w-full">
+                {loading ? 'Creating account…' : 'Create Account'}
+              </button>
+              <div className="relative flex items-center gap-3 my-2">
+                <div className="flex-1 h-px bg-slate-200 dark:bg-dark-border" />
+                <span className="text-xs text-slate-400">or</span>
+                <div className="flex-1 h-px bg-slate-200 dark:bg-dark-border" />
+              </div>
+              <button type="button" onClick={handleGoogle} className="btn-secondary w-full gap-3">
+                <svg className="w-4 h-4" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                Continue with Google
+              </button>
+            </form>
+          )}
         </div>
       </motion.div>
     </div>
-  );
+  )
 }

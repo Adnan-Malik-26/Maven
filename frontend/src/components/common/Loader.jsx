@@ -1,52 +1,34 @@
-import React from 'react';
-import { motion } from 'framer-motion';
+import { clsx } from 'clsx'
 
-/**
- * Full-page loader shown during route transitions or auth init.
- */
-export function PageLoader() {
+function Spinner({ size }) {
+  const sz = { sm: 'w-4 h-4', md: 'w-6 h-6', lg: 'w-10 h-10' }[size] ?? 'w-6 h-6'
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-[#0a0a0f] z-50">
-      <MavenSpinner size={48} />
+    <div className={clsx('rounded-full border-2 border-blue-500/20 border-t-blue-500 animate-spin', sz)} />
+  )
+}
+
+function Dots() {
+  return (
+    <div className="flex items-center gap-1.5">
+      {[0, 1, 2].map(i => (
+        <span
+          key={i}
+          className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"
+          style={{ animationDelay: `${i * 0.15}s` }}
+        />
+      ))}
     </div>
-  );
+  )
 }
 
-/**
- * Inline spinner with the MAVEN brand orbit animation.
- */
-export function MavenSpinner({ size = 32 }) {
+function Skeleton({ width = 'w-full', height = 'h-4' }) {
   return (
-    <div className="relative" style={{ width: size, height: size }}>
-      {/* Outer ring */}
-      <motion.div
-        className="absolute inset-0 rounded-full border-2 border-brand-500/20"
-        style={{ borderTopColor: '#8b5cf6' }}
-        animate={{ rotate: 360 }}
-        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-      />
-      {/* Inner dot */}
-      <div
-        className="absolute rounded-full bg-brand-500"
-        style={{
-          width: size * 0.22,
-          height: size * 0.22,
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-        }}
-      />
-    </div>
-  );
+    <div className={clsx('rounded-lg bg-slate-200 dark:bg-dark-surface animate-shimmer', width, height)} />
+  )
 }
 
-/**
- * Skeleton block for loading placeholders.
- */
-export function Skeleton({ className = '' }) {
-  return (
-    <div className={`shimmer-bg rounded-lg ${className}`} />
-  );
+export default function Loader({ variant = 'spinner', size = 'md', width, height }) {
+  if (variant === 'dots')    return <Dots />
+  if (variant === 'skeleton') return <Skeleton width={width} height={height} />
+  return <Spinner size={size} />
 }
-
-export default MavenSpinner;

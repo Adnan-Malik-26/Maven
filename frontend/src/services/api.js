@@ -1,72 +1,31 @@
-import axios from 'axios';
+import axios from 'axios'
+import { supabase } from '../lib/supabaseClient'
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const API = axios.create({
+  baseURL: import.meta.env.VITE_BACKEND_URL,
+})
 
-const api = axios.create({
-  baseURL: API_BASE,
-  timeout: 30_000,
-});
-
-// ── Request interceptor: attach Bearer token ──────────────────────────────
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('maven_access_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+API.interceptors.request.use(async (config) => {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session?.access_token) {
+    config.headers.Authorization = `Bearer ${session.access_token}`
   }
-  return config;
-});
+  return config
+})
 
-// ── Response interceptor: handle 401 globally ─────────────────────────────
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.clear();
-      window.location.href = '/auth';
-    }
-    return Promise.reject(error);
-  }
-);
+export const submitVideo = (formData, onProgress) =>
+  API.post('/api/analysis/submit', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (e) => {
+      if (onProgress && e.total) {
+        onProgress(Math.round((e.loaded / e.total) * 100))
+      }
+    },
+  })
 
-// ─────────────────────────────────────────────────────────────────────────
-// Auth
-// ─────────────────────────────────────────────────────────────────────────
-export const authApi = {
-  signup: (email, password, firstName, lastName) =>
-    api.post('/auth/signup', { email, password, firstName, lastName }),
+export const getJobs   = ()      => API.get('/api/analysis/jobs')
+export const getJob    = (id)    => API.get(`/api/analysis/jobs/${id}`)
+export const getResult = (jobId) => API.get(`/api/results/${jobId}`)
+export const deleteJob = (id)    => API.delete(`/api/analysis/jobs/${id}`)
 
-  login: (email, password) =>
-    api.post('/auth/login', { email, password }),
-
-  logout: () =>
-    api.post('/auth/logout'),
-
-  resetPassword: (email) =>
-    api.post('/auth/reset-password', { email }),
-
-  updatePassword: (newPassword) =>
-    api.post('/auth/update-password', { newPassword }),
-};
-
-// ─────────────────────────────────────────────────────────────────────────
-// Analysis
-// ─────────────────────────────────────────────────────────────────────────
-export const analysisApi = {
-  /**
-   * Upload a video file and trigger analysis.
-   * @param {File}      file       - The video file to analyse
-   * @param {Function}  onProgress - Axios upload progress callback
-   * @returns {Promise<{ jobId: string }>}
-   */
-  submitVideo: (file, onProgress) => {
-    const form = new FormData();
-    form.append('video', file);
-    return api.post('/analysis/submit', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      onUploadProgress: onProgress,
-      timeout: 120_000, // 2 min for large uploads
-    });
-  },
-};
-
-export default api;
+export default API
