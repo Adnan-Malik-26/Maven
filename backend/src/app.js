@@ -61,7 +61,7 @@ app.use((req, res) => {
   res.status(404).json({ error: "Route not found" });
 })
 
-const errorHandler = require('./middleware/error.middleware.js');
+const { errorHandler } = require('./middleware/error.middleware.js');
 app.use(errorHandler);
 
 module.exports = {
