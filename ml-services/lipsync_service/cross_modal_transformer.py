@@ -122,6 +122,7 @@ class SyncNet_color(nn.Module):
 # ---------------------------------------------------------------------------
 
 _sync_model: SyncNet_color | None = None
+_weights_loaded: bool = False
 
 
 def get_sync_model() -> SyncNet_color:
@@ -132,7 +133,7 @@ def get_sync_model() -> SyncNet_color:
     Logs a warning and continues with random weights so the service
     stays alive during development before lipsync_expert.pth is downloaded.
     """
-    global _sync_model
+    global _sync_model, _weights_loaded
     if _sync_model is not None:
         return _sync_model
 
@@ -147,6 +148,7 @@ def get_sync_model() -> SyncNet_color:
         else:
             _sync_model.load_state_dict(state)
         _sync_model.eval()
+        _weights_loaded = True
         logger.info("SyncNet loaded from %s on %s", WEIGHTS_PATH, DEVICE)
     else:
         logger.warning(
@@ -158,6 +160,11 @@ def get_sync_model() -> SyncNet_color:
         _sync_model.eval()
 
     return _sync_model
+
+
+def is_weights_loaded() -> bool:
+    get_sync_model()  # ensure model is initialized
+    return _weights_loaded
 
 
 # ---------------------------------------------------------------------------
@@ -381,6 +388,7 @@ def analyze_lipsync(video_path: str) -> dict:
             "verdict": "NO_SPEECH_DETECTED",
             "flagged_segments": [],
             "windows_analyzed": 0,
+            "weights_loaded": is_weights_loaded(),
         }
 
     mean_score = float(np.mean(window_scores))
@@ -419,4 +427,5 @@ def analyze_lipsync(video_path: str) -> dict:
         "verdict": verdict,
         "flagged_segments": merged[:10],  # cap at 10 entries for payload size
         "windows_analyzed": len(window_scores),
+        "weights_loaded": is_weights_loaded(),
     }

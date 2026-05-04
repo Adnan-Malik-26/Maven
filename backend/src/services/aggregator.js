@@ -1,11 +1,4 @@
 function computeFinalVerdict({ fftResult, livenessResult, lipsyncResult }) {
-    // Define weights
-    const weights = {
-        fft: 0.30,
-        liveness: 0.40,
-        lipsync: 0.30
-    };
-
     // Convert scores to a unified "fake probability" scale (0 = REAL, 1 = FAKE)
     // FFT's artifact_score is already on this scale
     const fftFakeProb = fftResult.artifact_score;
@@ -15,10 +8,23 @@ function computeFinalVerdict({ fftResult, livenessResult, lipsyncResult }) {
     const livenessFakeProb = 1 - livenessResult.liveness_score;
     const lipsyncFakeProb = 1 - lipsyncResult.sync_score;
 
+    // When SyncNet weights are absent, scores are random noise — redistribute
+    // lipsync's 30% weight proportionally to FFT and liveness instead
+    let fftW, livenessW, lipsyncW;
+    if (lipsyncResult.weights_loaded === false) {
+        fftW      = 0.43;  // 0.30 / 0.70 * 1.0 redistributed
+        livenessW = 0.57;  // 0.40 / 0.70 * 1.0
+        lipsyncW  = 0.00;
+    } else {
+        fftW      = 0.30;
+        livenessW = 0.40;
+        lipsyncW  = 0.30;
+    }
+
     // Compute weighted average
-    const finalFakeProb = (fftFakeProb * weights.fft) +
-        (livenessFakeProb * weights.liveness) +
-        (lipsyncFakeProb * weights.lipsync);
+    const finalFakeProb = (fftFakeProb * fftW) +
+        (livenessFakeProb * livenessW) +
+        (lipsyncFakeProb * lipsyncW);
 
     // Apply thresholds
     // < 0.40 = REAL, 0.40–0.65 = UNCERTAIN, > 0.65 = FAKE
@@ -51,6 +57,7 @@ function computeFinalVerdict({ fftResult, livenessResult, lipsyncResult }) {
         confidence: Number(confidence.toFixed(4)),
         breakdown: {
             finalFakeProbability: Number(finalFakeProb.toFixed(4)),
+            weightsUsed: { fft: fftW, liveness: livenessW, lipsync: lipsyncW },
             fft: {
                 rawScore: fftResult.artifact_score,
                 unifiedFakeProb: fftFakeProb
@@ -61,7 +68,8 @@ function computeFinalVerdict({ fftResult, livenessResult, lipsyncResult }) {
             },
             lipsync: {
                 rawScore: lipsyncResult.sync_score,
-                unifiedFakeProb: lipsyncFakeProb
+                unifiedFakeProb: lipsyncFakeProb,
+                weightsLoaded: lipsyncResult.weights_loaded ?? true
             }
         }
     };

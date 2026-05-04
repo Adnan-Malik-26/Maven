@@ -143,7 +143,9 @@ async def analyze(req: AnalysisRequest):
         # ------------------------------------------------------------------
         # 4. Score fusion: 0.55 × rPPG + 0.45 × blink
         # ------------------------------------------------------------------
-        rppg_score = rppg["signal_quality"] if rppg["pulse_present"] else 0.1
+        # 0.5 (neutral) when no pulse detected — absence of signal is ambiguous
+        # (poor lighting, motion, compression) and should not penalize real videos
+        rppg_score = rppg["signal_quality"] if rppg["pulse_present"] else 0.5
         blink_score = blink["regularity_score"]
         liveness_score = round(0.55 * rppg_score + 0.45 * blink_score, 4)
 
