@@ -10,9 +10,9 @@ Deepfake videos often suppress blink frequency or produce irregular patterns.
 import logging
 
 import cv2
-import mediapipe as mp
 import numpy as np
 from scipy.spatial.distance import euclidean
+from face_landmarker import create_face_landmarker, detect_face_landmarks
 
 logger = logging.getLogger(__name__)
 
@@ -91,11 +91,7 @@ def analyze_blinks(video_path: str) -> dict:
     # CRITICAL: Instantiate FaceMesh ONCE outside the frame loop.
     # Creating it per-frame causes severe memory leaks and OOM crashes.
     # -----------------------------------------------------------------------
-    face_mesh = mp.solutions.face_mesh.FaceMesh(
-        static_image_mode=False,
-        max_num_faces=1,
-        refine_landmarks=True,
-    )
+    face_landmarker = create_face_landmarker()
 
     cap = cv2.VideoCapture(video_path)
     try:
@@ -113,11 +109,9 @@ def analyze_blinks(video_path: str) -> dict:
                 break
 
             h, w = frame.shape[:2]
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            result = face_mesh.process(rgb)
+            landmarks = detect_face_landmarks(face_landmarker, frame)
 
-            if result.multi_face_landmarks:
-                landmarks = result.multi_face_landmarks[0].landmark
+            if landmarks:
 
                 left_ear  = _ear(landmarks, LEFT_EYE,  h, w)
                 right_ear = _ear(landmarks, RIGHT_EYE, h, w)
@@ -138,7 +132,7 @@ def analyze_blinks(video_path: str) -> dict:
     finally:
         cap.release()
         # CRITICAL: Always close FaceMesh to release MediaPipe GPU/CPU resources
-        face_mesh.close()
+        face_landmarker.close()
         logger.info("Blink: processed %d frames, %d blinks detected", frame_idx, len(blink_events))
 
     # -----------------------------------------------------------------------

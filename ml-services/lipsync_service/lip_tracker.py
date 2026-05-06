@@ -5,6 +5,7 @@ from mediapipe.tasks.python import vision
 import numpy as np
 import logging
 import os
+from pathlib import Path
 import urllib.request
 
 logging.basicConfig(level=logging.INFO)
@@ -16,15 +17,16 @@ LOWER_LIP = 14
 LEFT_LIP = 78
 RIGHT_LIP = 308
 
-MODEL_PATH = "models/face_landmarker.task"
+SERVICE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = SERVICE_DIR / "models" / "face_landmarker.task"
 MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
 
 def get_model():
-    if not os.path.exists(MODEL_PATH):
+    if not MODEL_PATH.exists():
         logger.info(f"Downloading face landmarker model from {MODEL_URL}...")
-        os.makedirs("models", exist_ok=True)
+        MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
         urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
-    return MODEL_PATH
+    return str(MODEL_PATH)
 
 def extract_lip_movements(video_path: str):
     logger.info(f"Extracting lip movements from {video_path}")

@@ -7,9 +7,9 @@ Extracts a cardiac pulse signal from forehead skin color variations across video
 import logging
 
 import cv2
-import mediapipe as mp
 import numpy as np
 from scipy.signal import butter, filtfilt
+from face_landmarker import create_face_landmarker, detect_face_landmarks
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +54,7 @@ def extract_rppg_signal(video_path: str) -> dict:
     # Creating it per-frame causes severe memory leaks and OOM crashes on
     # videos longer than 30 seconds.
     # -----------------------------------------------------------------------
-    face_mesh = mp.solutions.face_mesh.FaceMesh(
-        static_image_mode=False,
-        max_num_faces=1,
-        refine_landmarks=True,
-    )
+    face_landmarker = create_face_landmarker()
 
     cap = cv2.VideoCapture(video_path)
     try:
@@ -75,11 +71,9 @@ def extract_rppg_signal(video_path: str) -> dict:
             if not ret:
                 break
 
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            result = face_mesh.process(rgb)
+            landmarks = detect_face_landmarks(face_landmarker, frame)
 
-            if result.multi_face_landmarks:
-                landmarks = result.multi_face_landmarks[0].landmark
+            if landmarks:
                 h, w = frame.shape[:2]
 
                 # Extract forehead landmark pixel coordinates
@@ -107,7 +101,7 @@ def extract_rppg_signal(video_path: str) -> dict:
 
     finally:
         cap.release()
-        face_mesh.close()  # free MediaPipe resources unconditionally
+        face_landmarker.close()  # free MediaPipe resources unconditionally
         logger.info("rPPG: processed %d frames, %d had valid forehead ROI", frame_idx, len(rgb_means))
 
     # -----------------------------------------------------------------------
