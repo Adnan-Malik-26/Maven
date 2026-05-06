@@ -32,7 +32,7 @@ export default function Upload() {
       setProgress(100)
       setTimeout(() => navigate(`/result/${data.jobId ?? data.job_id}`), 600)
     } catch (err) {
-      setError(err?.response?.data?.message ?? 'Upload failed. Please try again.')
+      setError(err?.response?.data?.message ?? err?.response?.data?.error ?? 'Upload failed. Please try again.')
       setUploading(false)
       setProgress(0)
       setStatus('')

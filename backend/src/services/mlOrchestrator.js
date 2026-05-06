@@ -23,18 +23,18 @@ async function runMLAnalysis(videoPath, jobId) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes
 
-        const requestOptions = {
+        const makeRequestOptions = (body) => ({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ video_path: videoPath }),
+            body: JSON.stringify(body),
             signal: controller.signal
-        };
+        });
 
         // Call the 3 services in parallel using built-in fetch
         const [fftResponse, livenessResponse, lipsyncResponse] = await Promise.all([
-            fetch(ML_SERVICES.fft, requestOptions),
-            fetch(ML_SERVICES.liveness, requestOptions),
-            fetch(ML_SERVICES.lipsync, requestOptions)
+            fetch(ML_SERVICES.fft, makeRequestOptions({ video_path: videoPath })),
+            fetch(ML_SERVICES.liveness, makeRequestOptions({ video_url: videoPath, job_id: jobId })),
+            fetch(ML_SERVICES.lipsync, makeRequestOptions({ video_url: videoPath, job_id: jobId }))
         ]);
 
         // Clear the timeout since requests finished
@@ -56,6 +56,10 @@ async function runMLAnalysis(videoPath, jobId) {
             livenessResult,
             lipsyncResult
         });
+
+        // Attach full service responses so the frontend can display per-layer details
+        finalResult.fftResult = fftResult;
+        finalResult.livenessResult = livenessResult;
 
         // Save the result to Supabase
         await saveAnalysisResult(jobId, finalResult.verdict, finalResult);

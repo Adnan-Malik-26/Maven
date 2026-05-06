@@ -1,0 +1,94 @@
+# ── Dependencies ──────────────────────────────────────────────────────────────
+node_modules/
+**/node_modules/
+
+# ── Environment / secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.codex-run-logs/
+.npm-cache/
+
+# ── Build outputs ─────────────────────────────────────────────────────────────
+dist/
+**/dist/
+build/
+coverage/
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+myenv/
+*.egg-info/
+.eggs/
+
+# ── ML model weights & media (large binary files) ─────────────────────────────
+weights/
+**/weights/
+*.pt
+*.pth
+*.onnx
+*.safetensors
+*.task
+*.bin
+*.mp4
+*.webm
+*.wav
+*.mp3
+
+# ── HuggingFace local cache (if ever stored in-project) ───────────────────────
+.cache/
+HF_HOME/
+huggingface/
+
+# ── Supabase local metadata ───────────────────────────────────────────────────
+**/supabase/.temp/
+
+# ── Uploaded / temp video files ───────────────────────────────────────────────
+uploads/
+temp/
+tmp/
+*.tmp
+*.temp
+
+# ── Office / binary documents (use markdown instead) ──────────────────────────
+*.docx
+*.doc
+*.xlsx
+*.xls
+*.pptx
+*.ppt
+*.pdf
+
+# ── OS / editor artifacts ─────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+*.bak
+*.backup
+
+# ── Codex / agent local artifacts ────────────────────────────────────────────
+.agents/workflows

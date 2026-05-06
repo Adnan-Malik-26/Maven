@@ -11,7 +11,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from analyzer import run_fft_analysis
+from analyzer import run_fft_analysis, _get_classifier
+from selimsef_predictor import get_dfdc_model
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -23,8 +24,17 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("FFT Service starting up...")
-    # Future: pre-load CNN classifier weights here
+    logger.info("FFT Service starting up — pre-loading deepfake classifiers...")
+    try:
+        _get_classifier()
+        logger.info("ViT classifier (dima806) ready.")
+    except Exception as exc:
+        logger.warning("ViT classifier pre-load failed (%s) — will retry on first request.", exc)
+    try:
+        get_dfdc_model()
+        logger.info("DFDC EfficientNet B7 NS ready.")
+    except Exception as exc:
+        logger.warning("DFDC model pre-load failed (%s) — will fall back to ViT-only.", exc)
     yield
     logger.info("FFT Service shutting down.")
 
@@ -57,7 +67,7 @@ app.add_middleware(
 
 class AnalysisRequest(BaseModel):
     video_path: str = Field(..., description="Absolute local path or URL to the video file")
-    max_frames: int = Field(default=120, ge=1, le=1000, description="Maximum frames to sample (performance cap)")
+    max_frames: int = Field(default=30, ge=1, le=500, description="Maximum frames to sample (performance cap — ViT inference is ~300ms/frame on CPU)")
     frame_step: int = Field(default=1, ge=1, description="Analyse every Nth frame")
 
 

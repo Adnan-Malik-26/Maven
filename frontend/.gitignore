@@ -1,3 +1,23 @@
+# Dependencies
 node_modules/
+
+# Environment / secrets
 .env
+.env.*
+!.env.example
+*.local
+
+# Build output
+dist/
+build/
+
+# Logs
+logs/
+*.log
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Agent artifacts
 .agents/workflows

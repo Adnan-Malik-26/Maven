@@ -1,10 +1,10 @@
 const Joi = require('joi');
 const jobIdSchema = Joi.string().uuid().required();
-const { getJobWithResult, getUserJobHistory } = require('../services/analysis.service');
+const { getJobStatus, getJobWithResult, getUserJobHistory } = require('../services/analysis.service');
 
 
 async function getJobResult(req, res, next) {
-    const { jobId } = req.params;
+    const jobId = req.params.jobId ?? req.params.id;
     const userId = req.user?.id;
 
     // Validate jobId format before hitting the database.
@@ -36,7 +36,9 @@ async function getJobResult(req, res, next) {
         else {
             return res.status(200).json({
                 message: "job analysis completed",
-                result: result.analysis_results
+                result: Array.isArray(result.analysis_results)
+                    ? result.analysis_results[0]
+                    : result.analysis_results
             });
 
 
@@ -45,6 +47,34 @@ async function getJobResult(req, res, next) {
 
 
 
+    } catch (error) {
+        next(error);
+    }
+}
+
+async function getAnalysisJobStatus(req, res, next) {
+    const jobId = req.params.jobId ?? req.params.id;
+    const userId = req.user?.id;
+
+    const { error: ValidationError } = jobIdSchema.validate(jobId);
+
+    if (ValidationError) {
+        const err = new Error(`Invalid jobId: ${ValidationError.details[0].message}`);
+        err.statusCode = 400;
+        return next(err);
+    }
+
+    try {
+        const job = await getJobStatus(jobId, userId);
+
+        if (!job) return res.status(404).json({
+            message: "job not found"
+        })
+
+        return res.status(200).json({
+            message: "job status found",
+            job
+        })
     } catch (error) {
         next(error);
     }
@@ -73,6 +103,7 @@ async function getJobHistory(req, res, next) {
 
 
 module.exports = {
+    getAnalysisJobStatus,
     getJobResult,
     getJobHistory
 }

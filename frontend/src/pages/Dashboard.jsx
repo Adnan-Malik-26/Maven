@@ -9,6 +9,13 @@ import JobCard from '../components/dashboard/JobCard'
 import Loader from '../components/common/Loader'
 import { supabase } from '../lib/supabaseClient'
 
+function normalizeJobs(payload) {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.jobs)) return payload.jobs
+  if (Array.isArray(payload?.data)) return payload.data
+  return []
+}
+
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center space-y-5">
@@ -33,11 +40,13 @@ export default function Dashboard() {
 
   const fetchJobs = useCallback(async () => {
     setLoading(true)
+    setError('')
     try {
-      const { data } = await getJobs()
-      setJobs(data.jobs ?? data ?? [])
+      const data = await getJobs()
+      setJobs(normalizeJobs(data))
     } catch {
       setError('Failed to load analyses.')
+      setJobs([])
     } finally {
       setLoading(false)
     }
@@ -71,8 +80,11 @@ export default function Dashboard() {
     fetchJobs()
   }, [fetchJobs])
 
+  const jobIds = normalizeJobs(jobs).map(j => j.id).join(',')
+
   useEffect(() => {
-    const processingIds = jobs.filter(j => j.status === 'PROCESSING').map(j => j.id)
+    const safeJobs = normalizeJobs(jobs)
+    const processingIds = safeJobs.filter(j => j.status === 'PROCESSING').map(j => j.id)
     if (!processingIds.length) return
 
     const channel = supabase
@@ -89,7 +101,7 @@ export default function Dashboard() {
       .subscribe()
 
     return () => supabase.removeChannel(channel)
-  }, [jobs.map(j => j.id).join(',')])
+  }, [jobIds, jobs])
 
   const handleDeleted = (id) => setJobs(prev => prev.filter(j => j.id !== id))
 

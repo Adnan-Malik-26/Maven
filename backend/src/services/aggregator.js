@@ -8,13 +8,19 @@ function computeFinalVerdict({ fftResult, livenessResult, lipsyncResult }) {
     const livenessFakeProb = 1 - livenessResult.liveness_score;
     const lipsyncFakeProb = 1 - lipsyncResult.sync_score;
 
-    // When SyncNet weights are absent, scores are random noise — redistribute
-    // lipsync's 30% weight proportionally to FFT and liveness instead
+    // Base weights. Liveness (rPPG + blink) is the strongest biological signal.
     let fftW, livenessW, lipsyncW;
     if (lipsyncResult.weights_loaded === false) {
-        fftW      = 0.43;  // 0.30 / 0.70 * 1.0 redistributed
-        livenessW = 0.57;  // 0.40 / 0.70 * 1.0
+        // Lipsync model not loaded — drop it entirely
+        fftW      = 0.45;
+        livenessW = 0.55;
         lipsyncW  = 0.00;
+    } else if (lipsyncResult.verdict === 'UNCERTAIN') {
+        // Lipsync can't make a confident call — halve its influence and
+        // redistribute to liveness (stronger physiological signal).
+        fftW      = 0.33;
+        livenessW = 0.52;
+        lipsyncW  = 0.15;
     } else {
         fftW      = 0.30;
         livenessW = 0.40;
@@ -26,15 +32,28 @@ function computeFinalVerdict({ fftResult, livenessResult, lipsyncResult }) {
         (livenessFakeProb * livenessW) +
         (lipsyncFakeProb * lipsyncW);
 
-    // Apply thresholds
-    // < 0.40 = REAL, 0.40–0.65 = UNCERTAIN, > 0.65 = FAKE
+    // REAL < 0.38 | UNCERTAIN 0.38–0.60 | FAKE > 0.60
+    // REAL threshold raised from 0.30 → 0.38: lipsync alone (often noisy)
+    // was pushing borderline-real videos into UNCERTAIN.
     let verdict;
-    if (finalFakeProb < 0.40) {
+    if (finalFakeProb < 0.38) {
         verdict = 'REAL';
-    } else if (finalFakeProb > 0.65) {
+    } else if (finalFakeProb > 0.60) {
         verdict = 'FAKE';
     } else {
         verdict = 'UNCERTAIN';
+    }
+
+    // Strong-liveness REAL override: rPPG + blink is the hardest signal for AI
+    // to fake. If liveness clearly says REAL and FFT also leans authentic, trust it.
+    if (livenessFakeProb < 0.25 && fftFakeProb < 0.50 && finalFakeProb < 0.48) {
+        verdict = 'REAL';
+    }
+
+    // Strong-liveness FAKE override: complete absence of biological signals
+    // is equally hard to fake in the other direction.
+    if (livenessFakeProb > 0.70 && finalFakeProb > 0.45) {
+        verdict = 'FAKE';
     }
 
     // Calculate confidence
@@ -69,7 +88,10 @@ function computeFinalVerdict({ fftResult, livenessResult, lipsyncResult }) {
             lipsync: {
                 rawScore: lipsyncResult.sync_score,
                 unifiedFakeProb: lipsyncFakeProb,
-                weightsLoaded: lipsyncResult.weights_loaded ?? true
+                weightsLoaded: lipsyncResult.weights_loaded ?? true,
+                windows_analyzed: lipsyncResult.windows_analyzed ?? 0,
+                verdict: lipsyncResult.verdict ?? null,
+                flagged_segments: lipsyncResult.flagged_segments ?? [],
             }
         }
     };

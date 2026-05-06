@@ -6,6 +6,7 @@ Uses ffmpeg for audio demuxing and librosa for feature extraction.
 
 import logging
 import os
+import shutil
 import subprocess
 import tempfile
 
@@ -13,6 +14,19 @@ import librosa
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+def _ffmpeg_exe() -> str:
+    # 1. Check PATH
+    exe = shutil.which("ffmpeg")
+    if exe:
+        return exe
+    # 2. Allow override via environment variable (set FFMPEG_PATH in .env)
+    env_path = os.environ.get("FFMPEG_PATH", "")
+    if env_path and os.path.isfile(env_path):
+        return env_path
+    raise FileNotFoundError(
+        "ffmpeg not found. Add it to PATH or set FFMPEG_PATH=/path/to/ffmpeg.exe in your .env"
+    )
 
 
 def extract_audio_wav(
@@ -40,7 +54,7 @@ def extract_audio_wav(
         logger.info("Extracting audio from %s → %s", video_path, wav_path)
         subprocess.run(
             [
-                "ffmpeg", "-y",
+                _ffmpeg_exe(), "-y",
                 "-i", video_path,
                 "-vn",              # no video
                 "-ar", str(target_sr),
@@ -65,6 +79,9 @@ def extract_audio_wav(
         stderr = exc.stderr.decode("utf-8", errors="replace") if exc.stderr else ""
         logger.error("ffmpeg failed: %s", stderr[-500:])  # last 500 chars of stderr
         raise RuntimeError(f"ffmpeg audio extraction failed: {stderr[-200:]}") from exc
+    except (FileNotFoundError, OSError) as exc:
+        logger.error("ffmpeg executable not available: %s", exc)
+        raise RuntimeError("ffmpeg executable not available") from exc
     finally:
         if wav_path and os.path.exists(wav_path):
             try:
@@ -73,31 +90,39 @@ def extract_audio_wav(
                 logger.warning("Could not delete temp wav %s: %s", wav_path, exc)
 
 
-def compute_mfcc(
+def compute_melspectrogram(
     audio: np.ndarray,
     sr: int,
-    n_mfcc: int = 40,
-    hop_length: int = 160,
+    n_mels: int = 80,
+    hop_length: int = 200,
+    n_fft: int = 800,
+    fmin: float = 55.0,
+    fmax: float = 7600.0,
 ) -> np.ndarray:
     """
-    Compute Mel-Frequency Cepstral Coefficients from a raw audio array.
+    Compute a normalized mel spectrogram matching the Wav2Lip SyncNet training
+    distribution (Prajwal et al., 2020 — hparams: n_mels=80, hop=200, fft=800).
 
-    Args:
-        audio:      Raw audio signal (float32 numpy array).
-        sr:         Sample rate in Hz.
-        n_mfcc:     Number of MFCC coefficients (default 40 for SyncNet).
-        hop_length: Hop length in samples (default 160 = 10ms at 16kHz).
+    The lipsync_expert.pth weights were trained on mel spectrograms, NOT MFCCs.
+    Feeding MFCCs produces near-zero cosine similarities (sync score ≈ 0.5 always).
 
     Returns:
-        MFCC matrix of shape (n_mfcc, T) where T = number of time frames.
+        Mel spectrogram of shape (80, T), normalized to [0, 1].
     """
-    return librosa.feature.mfcc(
+    mel = librosa.feature.melspectrogram(
         y=audio,
         sr=sr,
-        n_mfcc=n_mfcc,
+        n_mels=n_mels,
+        n_fft=n_fft,
         hop_length=hop_length,
-        n_fft=512,
+        win_length=n_fft,
+        fmin=fmin,
+        fmax=fmax,
     )
+    mel_db = librosa.power_to_db(mel, ref=np.max)
+    # Normalize to [0, 1] using Wav2Lip's min_level_db = -100
+    mel_norm = np.clip((mel_db + 100.0) / 100.0, 0.0, 1.0)
+    return mel_norm.astype(np.float32)
 
 
 def is_silent(

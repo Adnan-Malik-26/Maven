@@ -128,7 +128,7 @@ export default function Result() {
     if (jobStatus !== 'COMPLETED') return
     setLoading(true)
     getResult(jobId)
-      .then(({ data }) => setResult(data.result ?? data))
+      .then(setResult)
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [jobStatus, jobId])
@@ -143,7 +143,7 @@ export default function Result() {
 
   const fft      = result.details?.fftResult      ?? {}
   const liveness = result.details?.livenessResult ?? {}
-  const lipsync  = result.details?.lipsyncResult  ?? {}
+  const lipsync  = result.details?.breakdown?.lipsync ?? {}
 
   const layers = [
     {

@@ -1,6 +1,58 @@
+# Python virtual environments
 myenv/
-__pycache__/
-models/
-*.mp4
-*.wav
+.venv/
+venv/
+env/
 
+# Python cache
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+
+# ML model weights (large binary files — download separately)
+weights/
+**/weights/
+*.pt
+*.pth
+*.onnx
+*.safetensors
+*.bin
+*.task
+
+# HuggingFace cache
+.cache/
+HF_HOME/
+
+# Media / temp files
+*.mp4
+*.webm
+*.wav
+*.mp3
+temp/
+tmp/
+*.tmp
+
+# Service log files
+*.log
+logs/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Office / binary documents
+*.docx
+*.doc
+*.xlsx
+*.pptx
+*.pdf
+
+# OS artifacts
+.DS_Store
+Thumbs.db

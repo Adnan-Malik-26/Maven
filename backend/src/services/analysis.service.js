@@ -1,6 +1,48 @@
 const { supabase, supabaseAdmin } = require('./supabase.service');
 
 /**
+ * Ensures the authenticated Supabase user exists in public.users.
+ * This covers users who signed up directly through the frontend client when
+ * the auth.users trigger has not been installed in Supabase yet.
+ * @param {Object} user - Supabase auth user
+ * @returns {Promise<Object>} The public.users row
+ */
+async function ensureUserProfile(user) {
+  if (!user?.id || !user?.email) {
+    throw new Error('Cannot initialize user profile: missing authenticated user id or email');
+  }
+
+  const profilePayload = {
+    id: user.id,
+    email: user.email,
+    first_name: user.user_metadata?.first_name ?? null,
+    last_name: user.user_metadata?.last_name ?? null,
+  };
+
+  const { error: upsertError } = await supabaseAdmin
+    .from('users')
+    .upsert(profilePayload, { onConflict: 'id' });
+
+  if (upsertError) {
+    throw new Error(`Failed to initialize user profile: ${upsertError.message}`);
+  }
+
+  const { data, error: selectError } = await supabaseAdmin
+    .from('users')
+    .select('id,email,first_name,last_name')
+    .eq('id', user.id)
+    .single();
+
+  if (selectError || !data) {
+    throw new Error(
+      `User profile was not found after initialization for auth user ${user.id}: ${selectError?.message ?? 'no row returned'}`
+    );
+  }
+
+  return data;
+}
+
+/**
  * Uploads a file to the maven-videos bucket
  * @param {Buffer} fileBuffer - The video file buffer
  * @param {string} originalName - Original filename
@@ -143,6 +185,20 @@ async function getJobWithResult(jobId, userId) {
   return data;
 }
 
+async function getJobStatus(jobId, userId) {
+  const { data, error } = await supabaseAdmin.from('analysis_jobs')
+    .select('id,status,error_message,created_at')
+    .eq('id', jobId)
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to get job status: ${error.message}`);
+  }
+
+  return data;
+}
+
 /**
  * Fetches the last 50 jobs for a user
  * @param {string} userId - ID of the user
@@ -162,10 +218,12 @@ async function getUserJobHistory(userId) {
 }
 
 module.exports = {
+  ensureUserProfile,
   uploadVideoToStorage,
   createAnalysisJob,
   saveAnalysisResult,
   markJobFailed,
+  getJobStatus,
   getJobWithResult,
   getUserJobHistory
 };

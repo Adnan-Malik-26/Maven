@@ -23,9 +23,21 @@ export const submitVideo = (formData, onProgress) =>
     },
   })
 
-export const getJobs   = ()      => API.get('/api/analysis/jobs')
-export const getJob    = (id)    => API.get(`/api/analysis/jobs/${id}`)
-export const getResult = (jobId) => API.get(`/api/results/${jobId}`)
+export const getJobs = async () => {
+  const response = await API.get('/api/analysis/jobs')
+  return response.data?.jobs ?? response.data?.data ?? []
+}
+
+export const getJob = async (id) => {
+  const response = await API.get(`/api/analysis/jobs/${id}`)
+  return response.data?.job ?? response.data?.result ?? response.data
+}
+
+export const getResult = async (jobId) => {
+  const response = await API.get(`/api/results/${jobId}`)
+  return response.data?.result ?? response.data
+}
+
 export const deleteJob = (id)    => API.delete(`/api/analysis/jobs/${id}`)
 
 export default API

@@ -1,4 +1,4 @@
-const { uploadVideoToStorage, createAnalysisJob } = require('../services/analysis.service');
+const { ensureUserProfile, uploadVideoToStorage, createAnalysisJob } = require('../services/analysis.service');
 const { runMLAnalysis } = require('../services/mlOrchestrator');
 const { logger } = require('../utils/logger');
 
@@ -13,7 +13,10 @@ async function submitVideo(req, res, next) {
 
     try {
         // extract user id from req object
-        const userId = req.user?.id;
+        const user = req.user;
+        const userId = user?.id;
+
+        await ensureUserProfile(user);
 
         // extract file buffer from req object , buffer is raw data of file.
         const fileBuffer = req.file?.buffer;

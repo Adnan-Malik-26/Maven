@@ -15,12 +15,14 @@ from pathlib import Path
 
 import cv2
 import mediapipe as mp
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
 import numpy as np
 import torch
 import torch.nn as nn
 from skimage.transform import resize
 
-from audio_processor import compute_mfcc, extract_audio_wav, is_silent
+from audio_processor import compute_melspectrogram, extract_audio_wav, is_silent
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +31,13 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-WEIGHTS_PATH = Path(os.getenv("MODEL_WEIGHTS_PATH", "./weights")) / "lipsync_expert.pth"
+_SERVICE_DIR = Path(__file__).resolve().parent
+WEIGHTS_PATH = Path(os.getenv("MODEL_WEIGHTS_PATH", str(_SERVICE_DIR / "weights"))) / "lipsync_expert.pth"
+FACE_LANDMARKER_PATH = _SERVICE_DIR / "models" / "face_landmarker.task"
 
 WINDOW_FRAMES      = 5      # frames per SyncNet scoring window
 WINDOW_STRIDE      = 1      # dense scoring — every frame
-IMG_SIZE           = 88     # lip crop size expected by SyncNet
+IMG_SIZE           = 96     # face crop size expected by Wav2Lip SyncNet
 SILENCE_RMS_THRESH = 0.01   # RMS threshold for silence skip
 
 # MediaPipe outer lip landmark indices (Face Mesh 468-point model)
@@ -45,6 +49,30 @@ LIP_OUTER = [
 ]
 
 
+def create_face_landmarker():
+    if not FACE_LANDMARKER_PATH.exists():
+        raise FileNotFoundError(f"Face landmarker model not found at {FACE_LANDMARKER_PATH}")
+
+    base_options = python.BaseOptions(model_asset_path=str(FACE_LANDMARKER_PATH))
+    options = vision.FaceLandmarkerOptions(
+        base_options=base_options,
+        num_faces=1,
+        min_face_detection_confidence=0.5,
+        min_tracking_confidence=0.5,
+        running_mode=vision.RunningMode.IMAGE,
+    )
+    return vision.FaceLandmarker.create_from_options(options)
+
+
+def detect_face_landmarks(landmarker, frame):
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+    result = landmarker.detect(image)
+    if not result.face_landmarks:
+        return None
+    return result.face_landmarks[0]
+
+
 # ---------------------------------------------------------------------------
 # SyncNet Architecture
 # Exact match to lipsync_expert.pth checkpoint structure.
@@ -54,7 +82,7 @@ LIP_OUTER = [
 class Conv2d(nn.Module):
     def __init__(self, cin, cout, kernel_size, stride, padding, residual=False):
         super().__init__()
-        self.conv = nn.Sequential(
+        self.conv_block = nn.Sequential(
             nn.Conv2d(cin, cout, kernel_size, stride, padding),
             nn.BatchNorm2d(cout),
         )
@@ -62,7 +90,7 @@ class Conv2d(nn.Module):
         self.residual = residual
 
     def forward(self, x):
-        out = self.conv(x)
+        out = self.conv_block(x)
         return self.act(out + x) if self.residual else self.act(out)
 
 
@@ -79,39 +107,44 @@ class SyncNet_color(nn.Module):
 
         self.face_encoder = nn.Sequential(
             Conv2d(15, 32, 7, 1, 3),
-            Conv2d(32, 64, 5, (1, 2), 2),
+            Conv2d(32, 64, 5, (1, 2), 1),
+            Conv2d(64, 64, 3, 1, 1, residual=True),
             Conv2d(64, 64, 3, 1, 1, residual=True),
             Conv2d(64, 128, 3, 2, 1),
             Conv2d(128, 128, 3, 1, 1, residual=True),
+            Conv2d(128, 128, 3, 1, 1, residual=True),
+            Conv2d(128, 128, 3, 1, 1, residual=True),
             Conv2d(128, 256, 3, 2, 1),
+            Conv2d(256, 256, 3, 1, 1, residual=True),
             Conv2d(256, 256, 3, 1, 1, residual=True),
             Conv2d(256, 512, 3, 2, 1),
             Conv2d(512, 512, 3, 1, 1, residual=True),
-            Conv2d(512, 512, 3, 2, 1),
             Conv2d(512, 512, 3, 1, 1, residual=True),
-            Conv2d(512, 512, (3, 6), 1, 0),
-            nn.Flatten(),
-            nn.Linear(512, 512),
+            Conv2d(512, 512, 3, 2, 1),
+            Conv2d(512, 512, 3, 1, 0),
+            Conv2d(512, 512, 1, 1, 0),
         )
 
         self.audio_encoder = nn.Sequential(
             Conv2d(1, 32, 3, 1, 1),
             Conv2d(32, 32, 3, 1, 1, residual=True),
+            Conv2d(32, 32, 3, 1, 1, residual=True),
             Conv2d(32, 64, 3, (3, 1), 1),
+            Conv2d(64, 64, 3, 1, 1, residual=True),
             Conv2d(64, 64, 3, 1, 1, residual=True),
             Conv2d(64, 128, 3, 3, 1),
             Conv2d(128, 128, 3, 1, 1, residual=True),
+            Conv2d(128, 128, 3, 1, 1, residual=True),
             Conv2d(128, 256, 3, (3, 2), 1),
+            Conv2d(256, 256, 3, 1, 1, residual=True),
             Conv2d(256, 256, 3, 1, 1, residual=True),
             Conv2d(256, 512, 3, 1, 0),
             Conv2d(512, 512, 1, 1, 0),
-            nn.Flatten(),
-            nn.Linear(512, 512),
         )
 
     def forward(self, audio_seq, face_seq):
-        fa = self.audio_encoder(audio_seq)
-        fv = self.face_encoder(face_seq)
+        fa = self.audio_encoder(audio_seq).view(audio_seq.size(0), -1)
+        fv = self.face_encoder(face_seq).view(face_seq.size(0), -1)
         fa = nn.functional.normalize(fa, p=2, dim=1)
         fv = nn.functional.normalize(fv, p=2, dim=1)
         return (fa * fv).sum(dim=1)  # cosine similarity: (B,)
@@ -185,13 +218,8 @@ def extract_lip_crops(video_path: str) -> tuple[list, float]:
     logger.info("Lip crop extraction: opening video %s", video_path)
     lip_crops: list[np.ndarray] = []
 
-    # -----------------------------------------------------------------------
-    # CRITICAL: Single FaceMesh instance for the entire video
-    # -----------------------------------------------------------------------
-    face_mesh = mp.solutions.face_mesh.FaceMesh(
-        static_image_mode=False,
-        max_num_faces=1,
-    )
+    # CRITICAL: Single FaceLandmarker instance for the entire video.
+    face_landmarker = create_face_landmarker()
 
     cap = cv2.VideoCapture(video_path)
     try:
@@ -209,12 +237,9 @@ def extract_lip_crops(video_path: str) -> tuple[list, float]:
                 break
 
             h, w = frame.shape[:2]
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            result = face_mesh.process(rgb)
+            landmarks = detect_face_landmarks(face_landmarker, frame)
 
-            if result.multi_face_landmarks:
-                landmarks = result.multi_face_landmarks[0].landmark
-
+            if landmarks:
                 # Scale outer lip landmarks to pixel coordinates
                 pts = np.array(
                     [[int(landmarks[idx].x * w), int(landmarks[idx].y * h)]
@@ -241,7 +266,7 @@ def extract_lip_crops(video_path: str) -> tuple[list, float]:
 
     finally:
         cap.release()
-        face_mesh.close()  # always release MediaPipe resources
+        face_landmarker.close()  # always release MediaPipe resources
         logger.info(
             "Lip crops extracted: %d frames processed, fps=%.2f",
             frame_idx,
@@ -278,9 +303,14 @@ def analyze_lipsync(video_path: str) -> dict:
     try:
         audio, sr = extract_audio_wav(video_path, target_sr=16000)
     except RuntimeError as exc:
-        logger.warning("Audio extraction failed (%s) — treating as silent video", exc)
-        audio = np.zeros(16000, dtype=np.float32)
-        sr = 16000
+        logger.warning("Audio extraction failed (%s) - returning NO_SPEECH_DETECTED", exc)
+        return {
+            "sync_score": 0.5,
+            "verdict": "NO_SPEECH_DETECTED",
+            "flagged_segments": [],
+            "windows_analyzed": 0,
+            "weights_loaded": is_weights_loaded(),
+        }
 
     # -----------------------------------------------------------------------
     # 2. Lip crop extraction
@@ -304,10 +334,10 @@ def analyze_lipsync(video_path: str) -> dict:
         }
 
     # -----------------------------------------------------------------------
-    # 4. MFCC computation
+    # 4. Mel spectrogram computation (matches lipsync_expert.pth training input)
     # -----------------------------------------------------------------------
-    mfcc = compute_mfcc(audio, sr)  # shape: (40, T_audio)
-    audio_frames_per_video_frame = mfcc.shape[1] / len(lip_crops)
+    mel_spec = compute_melspectrogram(audio, sr)  # shape: (80, T_audio)
+    audio_frames_per_video_frame = mel_spec.shape[1] / len(lip_crops)
 
     # -----------------------------------------------------------------------
     # 5. Sliding window inference
@@ -321,9 +351,9 @@ def analyze_lipsync(video_path: str) -> dict:
         # Audio slice corresponding to this window
         a_start = int(i * audio_frames_per_video_frame)
         a_end   = int((i + WINDOW_FRAMES) * audio_frames_per_video_frame)
-        if a_end > mfcc.shape[1]:
+        if a_end > mel_spec.shape[1]:
             continue
-        audio_slice = mfcc[:, a_start:a_end]
+        audio_slice = mel_spec[:, a_start:a_end]
 
         # Skip silent windows — silence is not evidence of fake
         frame_samples_start = int((i / fps) * sr)
@@ -336,18 +366,18 @@ def analyze_lipsync(video_path: str) -> dict:
         # Shape: (15, IMG_SIZE, IMG_SIZE) → (1, 15, IMG_SIZE, IMG_SIZE)
         # -------------------------------------------------------------------
         stacked = np.concatenate(
-            [f.transpose(2, 0, 1) for f in window_frames],  # each: (3, H, W)
+            [f[IMG_SIZE // 2 :, :, :].transpose(2, 0, 1) for f in window_frames],
             axis=0,
-        ).astype(np.float32) / 255.0  # (15, IMG_SIZE, IMG_SIZE), normalised [0,1]
+        ).astype(np.float32) / 255.0  # (15, 48, 96), normalised [0,1]
 
         video_tensor = torch.from_numpy(stacked).unsqueeze(0).to(DEVICE)
 
         # -------------------------------------------------------------------
-        # Prepare audio tensor: resize MFCC slice to (80, 16)
-        # Shape: (80, 16) → (1, 1, 80, 16)
-        # Use skimage.transform.resize — handles 2D float arrays cleanly
+        # Prepare audio tensor: resize mel slice to (80, 16)
+        # Shape: (80, T_slice) → (80, 16) → (1, 1, 80, 16)
+        # Mel spectrogram already has 80 mel bins — only time axis is resized.
         # -------------------------------------------------------------------
-        mfcc_resized = resize(
+        mel_resized = resize(
             audio_slice,
             (80, 16),
             anti_aliasing=True,
@@ -355,7 +385,7 @@ def analyze_lipsync(video_path: str) -> dict:
         ).astype(np.float32)
 
         audio_tensor = (
-            torch.from_numpy(mfcc_resized)
+            torch.from_numpy(mel_resized)
             .unsqueeze(0)   # (1, 80, 16)
             .unsqueeze(0)   # (1, 1, 80, 16)
             .to(DEVICE)
