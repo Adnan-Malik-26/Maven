@@ -1,21 +1,20 @@
-import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Menu, X, Upload, LayoutDashboard, Home, ChevronDown, LogOut, User } from 'lucide-react'
+import { useState } from 'react'
+import { Upload, Library, ChevronDown, LogOut, User } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuth } from '../../context/AuthContext'
 import ThemeToggle from './ThemeToggle'
 
-const navLinks = [
-  { to: '/',          label: 'Home',      icon: Home },
-  { to: '/upload',    label: 'Upload',    icon: Upload },
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+const NAV = [
+  { to: '/analyze', label: 'Analyze', icon: Upload },
+  { to: '/library', label: 'Library', icon: Library },
 ]
 
 function UserMenu({ user, signOut }) {
   const [open, setOpen] = useState(false)
-  const navigate = useNavigate()
-  const initial = user.email?.[0]?.toUpperCase() ?? 'U'
+  const navigate        = useNavigate()
+  const initial         = user.email?.[0]?.toUpperCase() ?? 'U'
 
   const handleSignOut = async () => {
     await signOut()
@@ -27,12 +26,12 @@ function UserMenu({ user, signOut }) {
     <div className="relative">
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 hover:bg-slate-100 dark:hover:bg-dark-surface px-3 py-2 rounded-lg transition-colors"
+        className="flex items-center gap-2 hover:bg-slate-100 dark:hover:bg-dark-surface px-2.5 py-1.5 rounded-lg transition-colors"
       >
-        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white text-sm font-bold">
+        <span className="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white text-xs font-bold">
           {initial}
         </span>
-        <ChevronDown size={14} className={clsx('text-slate-500 transition-transform duration-200', open && 'rotate-180')} />
+        <ChevronDown size={13} className={clsx('text-slate-500 transition-transform duration-150', open && 'rotate-180')} />
       </button>
 
       <AnimatePresence>
@@ -40,27 +39,27 @@ function UserMenu({ user, signOut }) {
           <>
             <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
             <motion.div
-              initial={{ opacity: 0, y: 8, scale: 0.95 }}
+              initial={{ opacity: 0, y: 6, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 8, scale: 0.95 }}
-              transition={{ duration: 0.15 }}
-              className="absolute right-0 top-full mt-2 w-52 card shadow-xl z-20 p-1"
+              exit={{ opacity: 0, y: 6, scale: 0.96 }}
+              transition={{ duration: 0.13 }}
+              className="absolute right-0 top-full mt-2 w-48 card shadow-xl z-20 p-1 overflow-hidden"
             >
               <div className="px-3 py-2 border-b border-slate-100 dark:border-dark-border mb-1">
-                <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                <p className="text-xs font-mono text-slate-400 truncate">{user.email}</p>
               </div>
               <Link
-                to="/dashboard"
+                to="/library"
                 onClick={() => setOpen(false)}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-dark-surface transition-colors"
               >
-                <User size={14} /> Dashboard
+                <User size={13} /> My Library
               </Link>
               <button
                 onClick={handleSignOut}
                 className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
               >
-                <LogOut size={14} /> Sign Out
+                <LogOut size={13} /> Sign Out
               </button>
             </motion.div>
           </>
@@ -71,110 +70,58 @@ function UserMenu({ user, signOut }) {
 }
 
 export default function Navbar() {
-  const [mobileOpen, setMobileOpen] = useState(false)
   const { user, signOut } = useAuth()
-  const location = useLocation()
+  const location          = useLocation()
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/80 dark:bg-dark-bg/80 backdrop-blur-xl border-b border-slate-200 dark:border-dark-border">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+    <nav className="sticky top-0 z-50 h-14 bg-white/90 dark:bg-dark-bg/90 backdrop-blur-xl border-b border-slate-200 dark:border-dark-border flex items-center">
+      <div className="w-full max-w-none px-5 flex items-center justify-between">
 
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-2.5 shrink-0">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white font-black text-sm">
-              M
-            </div>
-            <div className="leading-none">
-              <span className="font-bold text-slate-900 dark:text-white tracking-tight">MAVEN</span>
-              <p className="text-[10px] text-slate-400 font-normal">Forensics</p>
-            </div>
-          </Link>
-
-          {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-1">
-            {navLinks.map(({ to, label }) => {
-              const active = location.pathname === to
-              return (
-                <Link
-                  key={to}
-                  to={to}
-                  className={clsx(
-                    'relative px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-                    active
-                      ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-dark-surface'
-                  )}
-                >
-                  {label}
-                </Link>
-              )
-            })}
+        {/* Logo */}
+        <Link to="/" className="flex items-center gap-2.5 shrink-0 mr-6">
+          <div className="w-7 h-7 rounded-md bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-black text-xs">
+            M
           </div>
+          <div className="leading-none">
+            <span className="font-bold text-sm tracking-widest text-slate-900 dark:text-white font-mono">MAVEN</span>
+            <p className="text-[9px] text-slate-400 font-mono tracking-widest uppercase">Forensics</p>
+          </div>
+        </Link>
 
-          {/* Right side */}
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            {user ? (
-              <UserMenu user={user} signOut={signOut} />
-            ) : (
-              <Link to="/auth" className="btn-secondary text-sm py-2 px-4">
-                Sign In
+        {/* Desktop Nav — just two tabs */}
+        <div className="flex items-center gap-1 flex-1">
+          {NAV.map(({ to, label, icon: Icon }) => {
+            const active = location.pathname.startsWith(to)
+            return (
+              <Link
+                key={to}
+                to={to}
+                className={clsx(
+                  'flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold tracking-widest uppercase transition-all duration-150',
+                  active
+                    ? 'text-cyan-500 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-500/10 border border-cyan-200 dark:border-cyan-500/20'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-dark-surface border border-transparent'
+                )}
+              >
+                <Icon size={12} />
+                {label}
               </Link>
-            )}
-            {/* Mobile hamburger */}
-            <button
-              className="md:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-dark-surface transition-colors"
-              onClick={() => setMobileOpen(o => !o)}
-            >
-              {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-            </button>
-          </div>
+            )
+          })}
+        </div>
+
+        {/* Right side */}
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          {user ? (
+            <UserMenu user={user} signOut={signOut} />
+          ) : (
+            <Link to="/auth" className="btn-secondary text-xs py-1.5 px-3.5 font-mono tracking-wide">
+              Sign In
+            </Link>
+          )}
         </div>
       </div>
-
-      {/* Mobile menu */}
-      <AnimatePresence>
-        {mobileOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
-            className="md:hidden overflow-hidden border-t border-slate-200 dark:border-dark-border"
-          >
-            <div className="px-4 py-3 space-y-1">
-              {navLinks.map(({ to, label, icon: Icon }) => {
-                const active = location.pathname === to
-                return (
-                  <Link
-                    key={to}
-                    to={to}
-                    onClick={() => setMobileOpen(false)}
-                    className={clsx(
-                      'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors',
-                      active
-                        ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10'
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-dark-surface'
-                    )}
-                  >
-                    <Icon size={16} /> {label}
-                  </Link>
-                )
-              })}
-              {!user && (
-                <Link
-                  to="/auth"
-                  onClick={() => setMobileOpen(false)}
-                  className="flex items-center justify-center btn-primary w-full mt-2"
-                >
-                  Sign In
-                </Link>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </nav>
   )
 }

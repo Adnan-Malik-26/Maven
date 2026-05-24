@@ -34,15 +34,22 @@ async function getJobResult(req, res, next) {
             })
         }
         else {
+            const analysisResult = Array.isArray(result.analysis_results)
+                ? result.analysis_results[0]
+                : result.analysis_results;
+
+            // Merge job-level fields (video_path, original_name) into the result
+            // so the frontend can render the video player and metadata strip
             return res.status(200).json({
                 message: "job analysis completed",
-                result: Array.isArray(result.analysis_results)
-                    ? result.analysis_results[0]
-                    : result.analysis_results
+                result: {
+                    ...analysisResult,
+                    video_path:    result.video_path    ?? null,
+                    original_name: result.original_name ?? null,
+                    file_size_mb:  result.file_size_mb  ?? null,
+                    created_at:    result.created_at    ?? analysisResult?.created_at ?? null,
+                }
             });
-
-
-
         }
 
 

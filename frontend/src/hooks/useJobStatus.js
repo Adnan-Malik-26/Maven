@@ -41,9 +41,9 @@ export function useJobStatus(jobId) {
       .on(
         'postgres_changes',
         {
-          event:  'UPDATE',
+          event: 'UPDATE',
           schema: 'public',
-          table:  'analysis_jobs',
+          table: 'analysis_jobs',
           filter: `id=eq.${jobId}`,
         },
         (payload) => {
