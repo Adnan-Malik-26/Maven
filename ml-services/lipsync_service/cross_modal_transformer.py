@@ -426,9 +426,9 @@ def analyze_lipsync(video_path: str) -> dict:
     # -----------------------------------------------------------------------
     # 7. Verdict
     # -----------------------------------------------------------------------
-    if mean_score < 0.4:
+    if mean_score < 0.35:
         verdict = "OUT_OF_SYNC"
-    elif mean_score < 0.65:
+    elif mean_score < 0.50:
         verdict = "UNCERTAIN"
     else:
         verdict = "IN_SYNC"

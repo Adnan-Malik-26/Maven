@@ -71,13 +71,39 @@ class AnalysisRequest(BaseModel):
     frame_step: int = Field(default=1, ge=1, description="Analyse every Nth frame")
 
 
+class TemporalWindowScore(BaseModel):
+    start_frame: int
+    end_frame:   int
+    score:       float
+
+
+class TemporalConsistency(BaseModel):
+    temporal_consistency_score: float = Field(
+        ...,
+        description="Frame-to-frame identity coherence [0=inconsistent/fake, 1=consistent/real]"
+    )
+    worst_window:  TemporalWindowScore | None = Field(
+        None,
+        description="Window with lowest consistency (most likely deepfake region)"
+    )
+    window_scores: list[TemporalWindowScore] = Field(
+        default_factory=list,
+        description="Per-window sliding consistency scores"
+    )
+    n_frames: int = Field(..., description="Number of frames used for temporal analysis")
+
+
 class FFTResult(BaseModel):
-    artifact_score: float = Field(..., description="Overall fake probability score [0=real, 1=fake]")
-    high_freq_ratio: float = Field(..., description="Mean high-frequency energy ratio across analysed frames")
-    suspicious_frames: list[int] = Field(..., description="Frame indices with HFR above threshold")
-    total_frames_analyzed: int = Field(..., description="Total number of frames processed")
-    frame_scores: list[float] = Field(..., description="Per-frame HFR scores (capped at 200 for payload size)")
-    verdict: str = Field(..., description="Preliminary verdict: REAL | UNCERTAIN | FAKE")
+    artifact_score:         float            = Field(..., description="Overall fake probability score [0=real, 1=fake]")
+    high_freq_ratio:        float            = Field(..., description="Mean high-frequency energy ratio across analysed frames")
+    suspicious_frames:      list[int]        = Field(..., description="Frame indices with HFR above threshold")
+    total_frames_analyzed:  int              = Field(..., description="Total number of frames processed")
+    frame_scores:           list[float]      = Field(..., description="Per-frame HFR scores (capped at 200 for payload size)")
+    verdict:                str              = Field(..., description="Preliminary verdict: REAL | UNCERTAIN | FAKE")
+    temporal_consistency:   TemporalConsistency | None = Field(
+        None,
+        description="Temporal identity coherence analysis across the video"
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@ Deepfake videos often suppress blink frequency or produce irregular patterns.
 """
 
 import logging
+import math
 
 import cv2
 import numpy as np
@@ -31,8 +32,11 @@ EAR_THRESH = 0.20
 # Minimum consecutive frames below EAR_THRESH to count as a blink
 CONSEC_FRAMES = 2
 
-# Physiological average blink rate (blinks/min) used for regularity scoring
+# Physiological average blink rate (blinks/min) used for regularity scoring.
+# Mean is 17.5/min; standard deviation for the Gaussian scoring is 25/min
+# (wide enough to cover the full normal range and gracefully degrade at extremes).
 PHYSIOLOGICAL_BLINK_RATE = 17.5
+BLINK_RATE_SIGMA          = 25.0  # Gaussian sigma for regularity scoring
 
 
 # ---------------------------------------------------------------------------
@@ -155,9 +159,14 @@ def analyze_blinks(video_path: str) -> dict:
     duration_min = max(total_frames / (fps * 60.0), 0.01)
     blink_rate = len(blink_events) / duration_min
 
-    # Regularity score: 1.0 at the physiological mean (17.5/min), 0.0 at extremes
-    # Formula: 1 - |rate - 17.5| / 17.5   clamped to [0, 1]
-    regularity = max(0.0, 1.0 - abs(blink_rate - PHYSIOLOGICAL_BLINK_RATE) / PHYSIOLOGICAL_BLINK_RATE)
+    # Regularity score: Gaussian centered on 17.5/min with sigma=25.
+    # This gracefully degrades at extremes instead of hitting 0.0 at >35/min.
+    # Formula: exp(-(rate - mean)^2 / (2 * sigma^2))
+    # At 17.5/min → 1.0 (perfect); at 68.7/min → ~0.13 (low but not zero).
+    # Old formula:  1 - |rate - 17.5| / 17.5  reached 0.0 at any rate >= 35.
+    regularity = math.exp(
+        -((blink_rate - PHYSIOLOGICAL_BLINK_RATE) ** 2) / (2.0 * BLINK_RATE_SIGMA ** 2)
+    )
 
     logger.info(
         "Blink: count=%d  rate=%.2f/min  regularity=%.3f  is_normal=%s",
@@ -171,7 +180,7 @@ def analyze_blinks(video_path: str) -> dict:
         "blink_count": len(blink_events),
         "blink_rate_per_min": round(blink_rate, 2),
         "regularity_score": round(regularity, 3),
-        "normal_range": [15, 25],
-        "is_normal": 15 <= blink_rate <= 25,
+        "normal_range": [10, 30],
+        "is_normal": 10 <= blink_rate <= 30,
         "frames_analyzed": total_frames,
     }

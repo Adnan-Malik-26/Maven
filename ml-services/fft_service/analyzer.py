@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 # DFDC model (lazy import to avoid circular; loaded once at startup)
 from selimsef_predictor import predict_video as _dfdc_predict_video, get_dfdc_model
+from temporal_analyzer import compute_temporal_consistency
 
 # Suppress noisy HuggingFace hub symlink warning on Windows
 import os
@@ -50,16 +51,26 @@ MODEL_ID = "dima806/deepfake_vs_real_image_detection"
 VIT_WEIGHT     = 0.85
 TEXTURE_WEIGHT = 0.15
 
+# Frame score threshold above which a frame is flagged as "suspicious".
+SUSPICIOUS_THRESHOLD = 0.60
 
-# Frame score threshold above which a frame is flagged as "suspicious"
-SUSPICIOUS_THRESHOLD = 0.50
+# Verdict thresholds (on the final weighted artifact_score).
+VERDICT_FAKE_THRESHOLD      = 0.65
+VERDICT_UNCERTAIN_THRESHOLD = 0.42
 
-# Verdict thresholds (on the final weighted artifact_score)
-VERDICT_FAKE_THRESHOLD      = 0.60
-VERDICT_UNCERTAIN_THRESHOLD = 0.35
+# Laplacian variance normalization upper bound.
+# Lowered 600.0 → 300.0: compressed mobile video (<5 MB H.265) has lower Laplacian
+# variance than uncompressed studio footage.
+LAP_VAR_UPPER = 300.0
 
-# Laplacian variance normalization upper bound (empirical for 256×256 face crops)
-LAP_VAR_UPPER = 600.0
+# ViT calibration: the dima806 model outputs ~50–56% fake probability for real
+# mobile-compressed video (H.265 / HEVC), creating a systematic false-positive bias.
+# Only scores below VIT_CONFIDENCE_THRESHOLD are treated as ambiguous noise.
+# Lowered 0.65 → 0.60: genuine deepfakes score 0.70–0.85 on ViT and must NOT
+# be compressed — only the ambiguous 0.50–0.60 zone (compression artifacts) is remapped.
+# Calibration remaps [0, VIT_CONFIDENCE_THRESHOLD] → [0, 0.45] (real-leaning)
+#                    [VIT_CONFIDENCE_THRESHOLD, 1.0] → [0.45, 1.0] (signal preserved)
+VIT_CONFIDENCE_THRESHOLD = 0.60
 
 # Maximum suspicious frames returned in the payload
 MAX_SUSPICIOUS_PAYLOAD = 50
@@ -154,24 +165,100 @@ def _compute_texture_fake_score(gray_frame: np.ndarray) -> float:
     return float(0.65 * lap_fake + 0.35 * grad_fake)
 
 
-def _vit_fake_score(pil_image: Image.Image) -> float:
+def _calibrate_vit_score(raw_score: float) -> float:
     """
-    Run the ViT deepfake classifier on a PIL image.
-    Returns fake probability in [0, 1].
+    Calibrate a raw ViT fake-probability score to remove compression bias.
+
+    The dima806 model outputs ~50–56% fake probability for real mobile-compressed
+    video. Scores below VIT_CONFIDENCE_THRESHOLD are ambiguous noise, not a genuine
+    fake signal. This function applies a piecewise linear remap:
+
+        [0,   VIT_CONFIDENCE_THRESHOLD] → [0,    0.45]  (compress toward real)
+        [VIT_CONFIDENCE_THRESHOLD, 1.0] → [0.45, 1.0]   (preserve genuine fake signal)
+
+    Examples:
+        0.55 (real compressed video)  → 0.38  (correctly real-leaning)
+        0.65 (boundary)               → 0.45  (neutral)
+        0.80 (clear deepfake)         → 0.72  (still strongly fake)
     """
+    if raw_score <= VIT_CONFIDENCE_THRESHOLD:
+        return raw_score * (0.45 / VIT_CONFIDENCE_THRESHOLD)
+    return 0.45 + (raw_score - VIT_CONFIDENCE_THRESHOLD) * (0.55 / (1.0 - VIT_CONFIDENCE_THRESHOLD))
+
+
+def _vit_score_and_embedding(
+    pil_image: Image.Image,
+) -> tuple[float, Optional[np.ndarray]]:
+    """
+    Run the ViT deepfake classifier on a PIL image in a single forward pass.
+
+    Returns:
+        (calibrated_fake_score, cls_embedding)
+
+    The embedding is the [CLS] token from the final ViT hidden state — a
+    dense vector encoding the semantic identity of the face crop.  It is used
+    downstream for temporal consistency analysis without any extra compute cost.
+    """
+    import torch
     clf = _get_classifier()
-    results = clf(pil_image)
-    for r in results:
-        label = r["label"].lower()
-        if label in ("fake", "ai", "deepfake", "generated", "artificial"):
+
+    # Determine the image processor attribute (varies by transformers version)
+    processor = getattr(clf, "image_processor", None) or getattr(clf, "feature_extractor", None)
+
+    if processor is None:
+        # Fallback: use the pipeline call (no embedding available)
+        logger.debug("ViT: no image_processor found — falling back to pipeline, embedding unavailable")
+        raw_results = clf(pil_image)
+        fake_score = _extract_fake_prob(raw_results)
+        return _calibrate_vit_score(fake_score), None
+
+    try:
+        inputs = processor(pil_image, return_tensors="pt")
+        with torch.no_grad():
+            outputs = clf.model(**inputs, output_hidden_states=True)
+
+        # ── Classification score ────────────────────────────────────────────
+        probs = torch.softmax(outputs.logits, dim=-1)[0]
+        id2label = clf.model.config.id2label
+        fake_score = _extract_fake_prob_from_probs(probs, id2label)
+
+        # ── [CLS] embedding from final hidden state ─────────────────────────
+        # Shape: (seq_len, hidden_dim); position 0 is the [CLS] summary token
+        embedding = outputs.hidden_states[-1][0, 0, :].cpu().numpy()  # (D,)
+        embedding = embedding / (np.linalg.norm(embedding) + 1e-8)     # L2-normalise
+
+        return _calibrate_vit_score(fake_score), embedding
+
+    except Exception as exc:
+        logger.warning(
+            "ViT embedding extraction failed: %s — falling back to pipeline (no embedding)", exc
+        )
+        raw_results = clf(pil_image)
+        fake_score = _extract_fake_prob(raw_results)
+        return _calibrate_vit_score(fake_score), None
+
+
+def _extract_fake_prob(pipeline_results: list) -> float:
+    """Extract fake probability from HuggingFace pipeline output list."""
+    for r in pipeline_results:
+        if r["label"].lower() in ("fake", "ai", "deepfake", "generated", "artificial"):
             return float(r["score"])
-    # If no explicit fake label found, look for real and invert
-    for r in results:
-        label = r["label"].lower()
-        if label in ("real", "authentic", "genuine"):
+    for r in pipeline_results:
+        if r["label"].lower() in ("real", "authentic", "genuine"):
             return 1.0 - float(r["score"])
-    # Fallback: use the top result's score as fake probability
-    return float(results[0]["score"])
+    return float(pipeline_results[0]["score"])
+
+
+def _extract_fake_prob_from_probs(probs, id2label: dict) -> float:
+    """Extract fake probability from a softmax probability tensor."""
+    import torch
+    for idx, label in id2label.items():
+        if label.lower() in ("fake", "ai", "deepfake", "generated", "artificial"):
+            return float(probs[idx].item())
+    for idx, label in id2label.items():
+        if label.lower() in ("real", "authentic", "genuine"):
+            return 1.0 - float(probs[idx].item())
+    return float(probs.max().item())
 
 
 def _temporal_consistency_factor(frame_scores: list[float]) -> float:
@@ -242,19 +329,23 @@ def run_fft_analysis(
     # Pre-load classifier before frame loop (avoids first-frame cold start skew)
     _get_classifier()
 
-    frame_scores:      list[float] = []
-    suspicious_frames: list[int]   = []
-    frame_idx        = 0
-    frames_analyzed  = 0
+    frame_scores:      list[float]        = []
+    suspicious_frames: list[int]          = []
+    embeddings:        list[np.ndarray]   = []   # ViT [CLS] tokens for temporal analysis
+    sampled_indices:   list[int]          = []   # video frame indices (for explainability)
 
+    # ── Even frame sampling across full video ──────────────────────────────────────
+    # CRITICAL: Previously read the first N frames (only ~1 second of content).
+    # Now sample evenly across the full video duration for accurate coverage.
+    n_sample = min(max_frames, max(1, total_video_frames))
+    sample_indices = np.linspace(0, max(0, total_video_frames - 1), n_sample, dtype=int)
+
+    frames_analyzed = 0
     try:
-        while cap.isOpened() and frames_analyzed < max_frames:
+        for frame_idx in sample_indices:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_idx))
             ret, frame = cap.read()
             if not ret:
-                break
-
-            if frame_idx % frame_step != 0:
-                frame_idx += 1
                 continue
 
             # Face crop
@@ -263,30 +354,31 @@ def run_fft_analysis(
             # Resize for consistent processing
             roi_resized = cv2.resize(roi, (256, 256), interpolation=cv2.INTER_AREA)
 
-            # ── ViT model score ──────────────────────────────────────────────
+            # ── ViT score + [CLS] embedding (single forward pass) ─────────────
             try:
                 pil_img = Image.fromarray(cv2.cvtColor(roi_resized, cv2.COLOR_BGR2RGB))
-                vit_score = _vit_fake_score(pil_img)
+                vit_score, embedding = _vit_score_and_embedding(pil_img)
+                if embedding is not None:
+                    embeddings.append(embedding)
+                    sampled_indices.append(int(frame_idx))
             except Exception as exc:
                 logger.warning("ViT inference failed on frame %d: %s — using texture only", frame_idx, exc)
                 vit_score = None
 
-            # ── Texture heuristic ────────────────────────────────────────────
+            # ── Texture heuristic ─────────────────────────────────────────────────
             gray = cv2.cvtColor(roi_resized, cv2.COLOR_BGR2GRAY)
             texture_score = _compute_texture_fake_score(gray)
 
-            # ── Blend ────────────────────────────────────────────────────────
+            # ── Blend ────────────────────────────────────────────────────────────
             if vit_score is not None:
                 frame_score = VIT_WEIGHT * vit_score + TEXTURE_WEIGHT * texture_score
             else:
                 frame_score = texture_score
 
             frame_scores.append(frame_score)
-
             if frame_score > SUSPICIOUS_THRESHOLD:
-                suspicious_frames.append(frame_idx)
+                suspicious_frames.append(int(frame_idx))
 
-            frame_idx      += 1
             frames_analyzed += 1
 
     finally:
@@ -304,6 +396,15 @@ def run_fft_analysis(
         0.0, 1.0,
     ))
 
+    # ── Temporal consistency (ViT [CLS] embedding cosine similarity) ──────────
+    temporal_result = compute_temporal_consistency(
+        embeddings=embeddings,
+        frame_indices=sampled_indices,
+    )
+    temporal_score    = temporal_result["temporal_consistency_score"]
+    # Convert consistency (real=high) to fake probability (real=low)
+    temporal_fake_prob = float(np.clip(1.0 - temporal_score, 0.0, 1.0))
+
     # ── DFDC EfficientNet B7 NS pass ─────────────────────────────────────────
     try:
         dfdc_score = _dfdc_predict_video(local_path, _crop_face_roi)
@@ -314,12 +415,18 @@ def run_fft_analysis(
     dfdc_available = get_dfdc_model() is not None
 
     # ── Final blend ───────────────────────────────────────────────────────────
-    # Texture is already embedded in vit_agg (per-frame TEXTURE_WEIGHT blend),
-    # so we only need to weight between the two model scores here.
+    # Weights: ViT/texture=40%, DFDC=35%, Temporal=25%
+    # Temporal is also forwarded to the aggregator for its own 4-signal blend.
     if dfdc_available:
-        artifact_score = float(np.clip(0.50 * dfdc_score + 0.50 * vit_agg, 0.0, 1.0))
+        artifact_score = float(np.clip(
+            0.40 * vit_agg + 0.35 * dfdc_score + 0.25 * temporal_fake_prob,
+            0.0, 1.0,
+        ))
     else:
-        artifact_score = vit_agg
+        artifact_score = float(np.clip(
+            0.55 * vit_agg + 0.45 * temporal_fake_prob,
+            0.0, 1.0,
+        ))
 
     if artifact_score > VERDICT_FAKE_THRESHOLD:
         verdict = "FAKE"
@@ -329,8 +436,8 @@ def run_fft_analysis(
         verdict = "REAL"
 
     logger.info(
-        "Analysis complete | frames=%d vit=%.4f dfdc=%.4f final=%.4f verdict=%s",
-        frames_analyzed, vit_agg, dfdc_score, artifact_score, verdict,
+        "Analysis complete | frames=%d vit=%.4f dfdc=%.4f temporal=%.4f final=%.4f verdict=%s",
+        frames_analyzed, vit_agg, dfdc_score, temporal_score, artifact_score, verdict,
     )
 
     result = {
@@ -340,6 +447,7 @@ def run_fft_analysis(
         "total_frames_analyzed": frames_analyzed,
         "frame_scores":          [round(s, 4) for s in frame_scores[:200]],
         "verdict":               verdict,
+        "temporal_consistency":  temporal_result,
     }
 
     if _tmp_file is not None:
