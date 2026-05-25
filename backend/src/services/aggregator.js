@@ -145,5 +145,10 @@ function computeFinalVerdict({ fftResult, livenessResult, lipsyncResult }) {
   };
 }
 
+<<<<<<< HEAD
 module.exports = { computeFinalVerdict };
 
+=======
+
+module.exports = { computeFinalVerdict };
+>>>>>>> 58b6e441b76b9f1d17c5a2b26a967de58f082a13

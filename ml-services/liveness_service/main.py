@@ -141,22 +141,33 @@ async def analyze(req: AnalysisRequest):
         )
 
         # ------------------------------------------------------------------
-        # 4. Score fusion: 0.55 × rPPG + 0.45 × blink
+        # 4. Score fusion: 0.70 × rPPG + 0.30 × blink
         # ------------------------------------------------------------------
+        # rPPG is the more reliable signal — cardiac pulse is nearly impossible
+        # for deepfakes to replicate, while blink detection is noisy and prone
+        # to false positives from lighting, head movement, and compression.
+        #
         # 0.15 when no pulse detected — absence of a cardiac signal is a strong
         # synthetic indicator; real videos with poor lighting still show weak signal
         rppg_score = rppg["signal_quality"] if rppg["pulse_present"] else 0.15
         blink_score = blink["regularity_score"]
-        liveness_score = round(0.55 * rppg_score + 0.45 * blink_score, 4)
+        liveness_score = round(0.70 * rppg_score + 0.30 * blink_score, 4)
+
+        # Floor: if rPPG strongly confirms real (pulse present + high quality),
+        # don't let a noisy blink detector drag the score below 0.65.
+        # A strong heartbeat is strong evidence the subject is real.
+        if rppg["pulse_present"] and rppg["signal_quality"] > 0.8:
+            liveness_score = max(liveness_score, 0.65)
 
         # Clamp to [0.0, 1.0] as a safety net
         liveness_score = max(0.0, min(1.0, liveness_score))
 
         logger.info(
-            "Liveness score=%.4f (rppg_score=%.3f, blink_score=%.3f) job_id=%s",
+            "Liveness score=%.4f (rppg_score=%.3f, blink_score=%.3f, rppg_floor_applied=%s) job_id=%s",
             liveness_score,
             rppg_score,
             blink_score,
+            rppg["pulse_present"] and rppg["signal_quality"] > 0.8,
             req.job_id,
         )
 
