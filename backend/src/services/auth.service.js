@@ -5,6 +5,23 @@ const { logger } = require('../utils/logger');
  * Sign up a new user with Supabase Auth.
  * Manually saves the created user to the public.users table.
  */
+
+async function googleSignIn() {
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: 'http://localhost:5173/dashboard'
+    }
+  })
+
+  if (error) {
+    throw new Error(`Google Sign In Error: ${error.message}`)
+  }
+
+  return data; //data includes session, user and access token 
+}
+
 async function signUp(email, password, firstName, lastName) {
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -20,6 +37,7 @@ async function signUp(email, password, firstName, lastName) {
   if (error) {
     throw new Error(`SignUp Error: ${error.message}`);
   }
+
 
   // If Supabase created the user, explicitly push it into the public.users table using the Admin role
   if (data && data.user) {
@@ -91,7 +109,7 @@ async function updatePassword(newPassword) {
  */
 async function signOut(token) {
   const { error } = await supabase.auth.signOut(token);
-  
+
   if (error) {
     throw new Error(`SignOut Error: ${error.message}`);
   }
@@ -102,5 +120,6 @@ module.exports = {
   signIn,
   sendPasswordResetEmail,
   updatePassword,
-  signOut
+  signOut,
+  googleSignIn
 };

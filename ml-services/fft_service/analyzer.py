@@ -414,12 +414,29 @@ def run_fft_analysis(
 
     dfdc_available = get_dfdc_model() is not None
 
+    # ── DFDC output calibration ───────────────────────────────────────────────
+    # The selimsef checkpoint has a high-bias: neutral face images can score
+    # 0.60–0.90 raw sigmoid depending on the face-swap type.
+    #
+    # Empirical observations:
+    #   - Real faces (my_intro.mp4):  raw ~0.01–0.05 (confidently real)
+    #   - Some fakes:                 raw ~0.20–0.40 (moderate signal)
+    #   - Strong fakes:               raw ~0.85–0.95 (high signal)
+    #
+    # Previous calibration [0.70, 1.0] → [0, 1] was too aggressive —
+    # it crushed moderate fake signals (0.30) to zero.
+    # New calibration: [0.15, 1.0] → [0, 1.0] preserves the full range.
+    DFDC_BIAS_LOW  = 0.15   # raw score below which model is confidently real
+    DFDC_BIAS_HIGH = 1.00   # theoretical maximum
+    dfdc_score = np.clip((dfdc_score - DFDC_BIAS_LOW) / (DFDC_BIAS_HIGH - DFDC_BIAS_LOW), 0.0, 1.0)
+
     # ── Final blend ───────────────────────────────────────────────────────────
-    # Weights: ViT/texture=40%, DFDC=35%, Temporal=25%
+    # Weights: ViT/texture=45%, DFDC=30%, Temporal=25%
+    # ViT gets more weight because it's the most frame-level sensitive detector.
     # Temporal is also forwarded to the aggregator for its own 4-signal blend.
     if dfdc_available:
         artifact_score = float(np.clip(
-            0.40 * vit_agg + 0.35 * dfdc_score + 0.25 * temporal_fake_prob,
+            0.45 * vit_agg + 0.30 * dfdc_score + 0.25 * temporal_fake_prob,
             0.0, 1.0,
         ))
     else:
@@ -427,6 +444,14 @@ def run_fft_analysis(
             0.55 * vit_agg + 0.45 * temporal_fake_prob,
             0.0, 1.0,
         ))
+
+    # ── ViT override: when ViT is overwhelmingly confident, trust it ─────────
+    # If 75%+ of frames are flagged suspicious AND ViT aggregate > 0.75,
+    # the ViT classifier is extremely confident this is fake. Don't let
+    # a low DFDC score drag the final score below the FAKE threshold.
+    suspicious_ratio = len(suspicious_frames) / max(frames_analyzed, 1)
+    if suspicious_ratio >= 0.75 and vit_agg > 0.75:
+        artifact_score = max(artifact_score, 0.70)  # floor at FAKE threshold
 
     if artifact_score > VERDICT_FAKE_THRESHOLD:
         verdict = "FAKE"

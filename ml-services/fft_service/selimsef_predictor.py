@@ -218,25 +218,12 @@ def predict_video(video_path: str, face_crop_fn: Callable) -> float:
         logits = model(batch)                                  # (N, 1)
         probs  = torch.sigmoid(logits).squeeze(-1).cpu().numpy()
 
-    # ── DFDC output calibration ───────────────────────────────────────────────
-    # The selimsef checkpoint has a systematic high-bias: even neutral face images
-    # score 0.75–0.90 raw sigmoid. This is likely because the training set was
-    # skewed (more fake than real samples) and the decision boundary shifted.
-    #
-    # Empirical observation: real faces → raw ~0.75–0.82, fake faces → raw ~0.85–0.95.
-    # We re-centre the scale: map [0.70, 1.0] → [0.0, 1.0] linearly.
-    # Scores below 0.70 are treated as confidently real (0.0).
-    # This restores the model’s discriminative signal without changing its weights.
-    DFDC_BIAS_LOW  = 0.70   # raw score below which model is calling real
-    DFDC_BIAS_HIGH = 1.00   # theoretical maximum
-    calibrated = np.clip((probs - DFDC_BIAS_LOW) / (DFDC_BIAS_HIGH - DFDC_BIAS_LOW), 0.0, 1.0)
-
+    # ── Return raw score (calibration is now handled in analyzer.py) ─────────
     raw_mean  = float(np.mean(probs))
-    cal_mean  = float(np.mean(calibrated))
     spread    = float(np.max(probs) - np.min(probs))
     logger.info(
-        "DFDC raw: mean=%.4f  min=%.4f  max=%.4f  spread=%.4f | calibrated: %.4f  (n=%d frames)",
-        raw_mean, float(np.min(probs)), float(np.max(probs)), spread, cal_mean, len(tensors),
+        "DFDC raw: mean=%.4f  min=%.4f  max=%.4f  spread=%.4f  (n=%d frames)",
+        raw_mean, float(np.min(probs)), float(np.max(probs)), spread, len(tensors),
     )
 
-    return float(np.clip(cal_mean, 0.0, 1.0))
+    return float(np.clip(raw_mean, 0.0, 1.0))

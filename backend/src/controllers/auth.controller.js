@@ -3,7 +3,7 @@ const authService = require('../services/auth.service');
 async function handleSignUp(req, res) {
   try {
     const { email, password, firstName, lastName } = req.body;
-    
+
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
@@ -18,7 +18,7 @@ async function handleSignUp(req, res) {
 async function handleLogin(req, res) {
   try {
     const { email, password } = req.body;
-    
+
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
@@ -30,10 +30,30 @@ async function handleLogin(req, res) {
   }
 }
 
+async function handleGoogleSignIn(req, res) {
+  try {
+    const data = await authService.googleSignIn();
+    return res.status(200).json({
+      message: "Gooogle Signin Initiatied",
+      data: data,
+    })
+
+  }
+
+  catch (error) {
+    return res.status(400).json({
+      message: "Google Sign In Failed",
+      error: error.message,
+    })
+
+  }
+
+}
+
 async function handlePasswordResetRequest(req, res) {
   try {
     const { email } = req.body;
-    
+
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
     }
@@ -48,7 +68,7 @@ async function handlePasswordResetRequest(req, res) {
 async function handleUpdatePassword(req, res) {
   try {
     const { newPassword } = req.body;
-    
+
     if (!newPassword) {
       return res.status(400).json({ error: 'New password is required' });
     }
@@ -64,7 +84,7 @@ async function handleLogout(req, res) {
   try {
     // If the token is passed in headers (like for requireAuth middleware)
     const token = req.headers.authorization?.split(' ')[1];
-    
+
     await authService.signOut(token);
     return res.status(200).json({ message: 'Logged out successfully' });
   } catch (error) {

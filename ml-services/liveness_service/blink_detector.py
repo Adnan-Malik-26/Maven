@@ -27,10 +27,13 @@ LEFT_EYE  = [362, 385, 387, 263, 373, 380]
 RIGHT_EYE = [33,  160, 158, 133, 153, 144]
 
 # EAR threshold below which the eye is considered closed
-EAR_THRESH = 0.20
+# Lowered from 0.20 to 0.18 to reduce false positives from squinting/head tilt
+EAR_THRESH = 0.18
 
 # Minimum consecutive frames below EAR_THRESH to count as a blink
-CONSEC_FRAMES = 2
+# Increased from 2 to 3 — real blinks last ~150-400ms (4-10 frames at 25fps)
+# so 3 frames is still well within range, but filters out noise
+CONSEC_FRAMES = 3
 
 # Physiological average blink rate (blinks/min) used for regularity scoring.
 # Mean is 17.5/min; standard deviation for the Gaussian scoring is 25/min
