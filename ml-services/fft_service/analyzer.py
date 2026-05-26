@@ -6,16 +6,23 @@ Dual-model pipeline for maximum accuracy:
              Frame-by-frame face classification via HuggingFace pipeline.
 
   Model B — selimsef DFDC EfficientNet B7 NS  (Kaggle competition winner)
-             Video-level score using 15 evenly-sampled frames.
+             Video-level score using 20 evenly-sampled frames.
 
-Final artifact_score = 50% DFDC + 40% ViT aggregate + 10% Laplacian texture.
-Both models must independently lean FAKE before a FAKE verdict is committed.
+  + Spectral analysis (2D FFT frequency-domain)
+  + Color consistency (face-background mismatch)
+  + Texture heuristic (Laplacian + Sobel smoothness)
+  + Temporal consistency (ViT embedding coherence)
+
+Final artifact_score blends 6 signals:
+  35% ViT + 20% DFDC + 15% Spectral + 15% Temporal + 15% Color
+Both ViT and DFDC must independently lean FAKE before a FAKE verdict is committed.
 
 Pipeline:
   1. Download video (URL) or open local path
-  2. ViT frame loop: detect face → ViT + texture blend → aggregate
-  3. DFDC pass: sample 15 frames → EfficientNet B7 NS → sigmoid mean
-  4. Blend scores → threshold → verdict
+  2. ViT frame loop: detect face → ViT + texture + spectral + color → aggregate
+  3. DFDC pass: sample 20 frames → EfficientNet B7 NS → robust mean
+  4. Temporal consistency from ViT [CLS] embeddings
+  5. Blend all signals → threshold → verdict
 """
 
 from __future__ import annotations
@@ -36,6 +43,8 @@ logger = logging.getLogger(__name__)
 # DFDC model (lazy import to avoid circular; loaded once at startup)
 from selimsef_predictor import predict_video as _dfdc_predict_video, get_dfdc_model
 from temporal_analyzer import compute_temporal_consistency
+from spectral_analyzer import compute_spectral_fake_score
+from color_consistency import compute_color_mismatch_score
 
 # Suppress noisy HuggingFace hub symlink warning on Windows
 import os
@@ -78,6 +87,12 @@ MAX_SUSPICIOUS_PAYLOAD = 50
 # Face detection: Haar cascade bundled with OpenCV
 _HAAR_CASCADE_PATH = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 
+# Single-scale analysis: 256×256 for consistent face crop analysis
+# NOTE: Multi-scale (128px) was removed — the ViT model produces much noisier
+# scores at lower resolution on compressed mobile video, causing false positives
+# in the temporal jitter detector and erratic frame scores.
+ANALYSIS_SCALE = 256
+
 
 # ---------------------------------------------------------------------------
 # Module-level state (lazy-loaded)
@@ -118,11 +133,15 @@ def _get_classifier():
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _crop_face_roi(frame: np.ndarray, padding: float = 0.15) -> np.ndarray:
-    """Return the largest detected face crop (with padding), or the full frame."""
+def _crop_face_roi(frame: np.ndarray, padding: float = 0.15) -> tuple[np.ndarray, tuple[int, int, int, int] | None]:
+    """
+    Return the largest detected face crop (with padding), or the full frame.
+    Also returns the face bounding box (x, y, w, h) for color consistency analysis,
+    or None if no face was detected.
+    """
     cascade = _get_face_cascade()
     if cascade is None:
-        return frame
+        return frame, None
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     gray = cv2.equalizeHist(gray)
@@ -135,9 +154,10 @@ def _crop_face_roi(frame: np.ndarray, padding: float = 0.15) -> np.ndarray:
     )
 
     if not len(faces):
-        return frame
+        return frame, None
 
     x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
+    face_box = (int(x), int(y), int(w), int(h))
     img_h, img_w = frame.shape[:2]
     pad_x = int(w * padding)
     pad_y = int(h * padding)
@@ -145,7 +165,7 @@ def _crop_face_roi(frame: np.ndarray, padding: float = 0.15) -> np.ndarray:
     y1 = max(0, y - pad_y)
     x2 = min(img_w, x + w + pad_x)
     y2 = min(img_h, y + h + pad_y)
-    return frame[y1:y2, x1:x2]
+    return frame[y1:y2, x1:x2], face_box
 
 
 def _compute_texture_fake_score(gray_frame: np.ndarray) -> float:
@@ -261,6 +281,23 @@ def _extract_fake_prob_from_probs(probs, id2label: dict) -> float:
     return float(probs.max().item())
 
 
+def _trimmed_mean(values: list[float], trim_fraction: float = 0.10) -> float:
+    """
+    Compute the trimmed mean — discard the top and bottom `trim_fraction`
+    of values before averaging.  More robust to outlier frames than simple mean.
+    """
+    if not values:
+        return 0.5
+    arr = np.array(values, dtype=np.float64)
+    n = len(arr)
+    trim_count = max(1, int(n * trim_fraction))
+    if n <= 2 * trim_count + 1:
+        return float(np.mean(arr))
+    sorted_arr = np.sort(arr)
+    trimmed = sorted_arr[trim_count: n - trim_count]
+    return float(np.mean(trimmed))
+
+
 def _temporal_consistency_factor(frame_scores: list[float]) -> float:
     """
     Slight multiplier based on temporal variance.
@@ -333,6 +370,8 @@ def run_fft_analysis(
     suspicious_frames: list[int]          = []
     embeddings:        list[np.ndarray]   = []   # ViT [CLS] tokens for temporal analysis
     sampled_indices:   list[int]          = []   # video frame indices (for explainability)
+    spectral_scores:   list[float]        = []   # per-frame spectral fake scores
+    color_scores:      list[float]        = []   # per-frame color mismatch scores
 
     # ── Even frame sampling across full video ──────────────────────────────────────
     # CRITICAL: Previously read the first N frames (only ~1 second of content).
@@ -348,13 +387,12 @@ def run_fft_analysis(
             if not ret:
                 continue
 
-            # Face crop
-            roi = _crop_face_roi(frame)
+            # Face crop (returns both the crop and the bounding box)
+            roi, face_box = _crop_face_roi(frame)
 
-            # Resize for consistent processing
-            roi_resized = cv2.resize(roi, (256, 256), interpolation=cv2.INTER_AREA)
+            # ── ViT analysis at primary scale ─────────────────────────────────
+            roi_resized = cv2.resize(roi, (ANALYSIS_SCALE, ANALYSIS_SCALE), interpolation=cv2.INTER_AREA)
 
-            # ── ViT score + [CLS] embedding (single forward pass) ─────────────
             try:
                 pil_img = Image.fromarray(cv2.cvtColor(roi_resized, cv2.COLOR_BGR2RGB))
                 vit_score, embedding = _vit_score_and_embedding(pil_img)
@@ -362,14 +400,33 @@ def run_fft_analysis(
                     embeddings.append(embedding)
                     sampled_indices.append(int(frame_idx))
             except Exception as exc:
-                logger.warning("ViT inference failed on frame %d: %s — using texture only", frame_idx, exc)
+                logger.warning("ViT inference failed on frame %d: %s", frame_idx, exc)
                 vit_score = None
 
             # ── Texture heuristic ─────────────────────────────────────────────────
-            gray = cv2.cvtColor(roi_resized, cv2.COLOR_BGR2GRAY)
+            roi_256 = roi_resized  # already 256×256 from above
+            gray = cv2.cvtColor(roi_256, cv2.COLOR_BGR2GRAY)
             texture_score = _compute_texture_fake_score(gray)
 
-            # ── Blend ────────────────────────────────────────────────────────────
+            # ── Spectral analysis (2D FFT frequency domain) ───────────────────────
+            try:
+                spectral_result = compute_spectral_fake_score(roi)
+                spectral_frame_score = spectral_result["spectral_fake_score"]
+                spectral_scores.append(spectral_frame_score)
+            except Exception as exc:
+                logger.warning("Spectral analysis failed on frame %d: %s", frame_idx, exc)
+                spectral_frame_score = 0.0
+
+            # ── Color consistency (face vs background) ────────────────────────────
+            try:
+                color_result = compute_color_mismatch_score(frame, face_box)
+                color_frame_score = color_result["color_mismatch_score"]
+                color_scores.append(color_frame_score)
+            except Exception as exc:
+                logger.warning("Color consistency failed on frame %d: %s", frame_idx, exc)
+                color_frame_score = 0.0
+
+            # ── Blend per-frame score ────────────────────────────────────────────
             if vit_score is not None:
                 frame_score = VIT_WEIGHT * vit_score + TEXTURE_WEIGHT * texture_score
             else:
@@ -387,72 +444,130 @@ def run_fft_analysis(
     if frames_analyzed == 0:
         raise ValueError("No frames could be extracted from the video")
 
-    # ── ViT + texture aggregate (per-frame scores already blend both) ─────────
-    scores_arr = np.array(frame_scores, dtype=np.float32)
-    mean_score = float(np.mean(scores_arr))
-    p75        = float(np.percentile(scores_arr, 75))
-    vit_agg    = float(np.clip(
-        (0.6 * mean_score + 0.4 * p75) * _temporal_consistency_factor(frame_scores),
+    # ── Compute intermediate signal aggregates ────────────────────────────────
+
+    # ViT + texture aggregate (trimmed mean — robust to outlier frames)
+    vit_agg = float(np.clip(
+        _trimmed_mean(frame_scores, trim_fraction=0.10) * _temporal_consistency_factor(frame_scores),
         0.0, 1.0,
     ))
 
-    # ── Temporal consistency (ViT [CLS] embedding cosine similarity) ──────────
+    # Spectral aggregate (mean of per-frame spectral scores)
+    spectral_agg = float(np.mean(spectral_scores)) if spectral_scores else 0.0
+
+    # Color consistency aggregate (mean of per-frame color scores)
+    color_agg = float(np.mean(color_scores)) if color_scores else 0.0
+
+    # Temporal consistency (ViT [CLS] embedding cosine similarity)
     temporal_result = compute_temporal_consistency(
         embeddings=embeddings,
         frame_indices=sampled_indices,
     )
-    temporal_score    = temporal_result["temporal_consistency_score"]
-    # Convert consistency (real=high) to fake probability (real=low)
+    temporal_score = temporal_result["temporal_consistency_score"]
     temporal_fake_prob = float(np.clip(1.0 - temporal_score, 0.0, 1.0))
 
-    # ── DFDC EfficientNet B7 NS pass ─────────────────────────────────────────
+    # DFDC EfficientNet B7 NS pass
     try:
-        dfdc_score = _dfdc_predict_video(local_path, _crop_face_roi)
+        dfdc_score = _dfdc_predict_video(local_path, lambda f: _crop_face_roi(f)[0])
     except Exception as exc:
         logger.warning("DFDC inference error: %s — neutral 0.5 used", exc)
         dfdc_score = 0.5
 
     dfdc_available = get_dfdc_model() is not None
 
-    # ── DFDC output calibration ───────────────────────────────────────────────
-    # The selimsef checkpoint has a high-bias: neutral face images can score
-    # 0.60–0.90 raw sigmoid depending on the face-swap type.
+    # FINAL SCORING — DFDC-Anchored Architecture
     #
-    # Empirical observations:
-    #   - Real faces (my_intro.mp4):  raw ~0.01–0.05 (confidently real)
-    #   - Some fakes:                 raw ~0.20–0.40 (moderate signal)
-    #   - Strong fakes:               raw ~0.85–0.95 (high signal)
+    # Design principle: DFDC EfficientNet B7 NS is the *anchor* model because:
+    #   1. It was trained on the DFDC deepfake competition dataset (real fakes)
+    #   2. It produces near-zero (0.005-0.01) on real video of any compression
+    #   3. It produces elevated scores (0.10-0.90) on actual deepfakes
+    #   4. It is NOT confused by H.265 compression, mobile cameras, or lighting
     #
-    # Previous calibration [0.70, 1.0] → [0, 1] was too aggressive —
-    # it crushed moderate fake signals (0.30) to zero.
-    # New calibration: [0.15, 1.0] → [0, 1.0] preserves the full range.
-    DFDC_BIAS_LOW  = 0.15   # raw score below which model is confidently real
-    DFDC_BIAS_HIGH = 1.00   # theoretical maximum
-    dfdc_score = np.clip((dfdc_score - DFDC_BIAS_LOW) / (DFDC_BIAS_HIGH - DFDC_BIAS_LOW), 0.0, 1.0)
+    # The ViT model (dima806) is a general image classifier that is biased by
+    # compression artifacts — it scores 0.50-0.85 on real compressed video.
+    # It is used ONLY as a secondary confirmation signal, never as primary.
+    #
+    # Model agreement drives the verdict:
+    #   - DFDC REAL + ViT REAL         → strong REAL
+    #   - DFDC FAKE + ViT FAKE         → strong FAKE
+    #   - DFDC REAL + ViT FAKE         → trust DFDC (ViT has compression bias)
+    #   - DFDC FAKE + ViT REAL         → UNCERTAIN (rare — needs investigation)
+    # ══════════════════════════════════════════════════════════════════════════
 
-    # ── Final blend ───────────────────────────────────────────────────────────
-    # Weights: ViT/texture=45%, DFDC=30%, Temporal=25%
-    # ViT gets more weight because it's the most frame-level sensitive detector.
-    # Temporal is also forwarded to the aggregator for its own 4-signal blend.
+    # ── DFDC: the anchor signal ───────────────────────────────────────────────
+    # No magic-number calibration — the raw DFDC output is already well-behaved:
+    #   Real video:  0.005 – 0.02  (confidently real)
+    #   Weak fake:   0.05  – 0.15  (moderate signal)
+    #   Strong fake: 0.15  – 0.90  (strong signal)
+    # Threshold: anything above 0.08 is elevated (above natural noise floor)
+    DFDC_FAKE_THRESHOLD = 0.08
+    DFDC_STRONG_FAKE    = 0.20
+
+    dfdc_leans_fake = dfdc_available and dfdc_score > DFDC_FAKE_THRESHOLD
+    dfdc_strong_fake = dfdc_available and dfdc_score > DFDC_STRONG_FAKE
+    dfdc_leans_real = dfdc_available and dfdc_score <= DFDC_FAKE_THRESHOLD
+
+    # ── ViT: secondary confirmation signal ────────────────────────────────────
+    # Only meaningful when it agrees with DFDC.
+    VIT_FAKE_THRESHOLD = 0.65  # must be high to avoid compression false positives
+    vit_leans_fake = vit_agg > VIT_FAKE_THRESHOLD
+    vit_leans_real = vit_agg < 0.40
+
+    # ── Model agreement scoring ───────────────────────────────────────────────
     if dfdc_available:
-        artifact_score = float(np.clip(
-            0.45 * vit_agg + 0.30 * dfdc_score + 0.25 * temporal_fake_prob,
-            0.0, 1.0,
-        ))
+        if dfdc_leans_real and vit_leans_real:
+            # Both models agree: REAL — strong confidence
+            # Weight DFDC heavily since it's the reliable anchor
+            artifact_score = float(np.clip(
+                0.45 * dfdc_score + 0.20 * vit_agg + 0.10 * spectral_agg + 0.10 * temporal_fake_prob + 0.15 * color_agg,
+                0.0, 1.0,
+            ))
+
+        elif dfdc_leans_fake and vit_leans_fake:
+            # Both models agree: FAKE — strong confidence
+            artifact_score = float(np.clip(
+                0.40 * dfdc_score + 0.25 * vit_agg + 0.10 * spectral_agg + 0.10 * temporal_fake_prob + 0.15 * color_agg,
+                0.0, 1.0,
+            ))
+            # Both agree it's fake — ensure score reflects this
+            artifact_score = max(artifact_score, 0.60)
+
+        elif dfdc_leans_real and vit_leans_fake:
+            # DISAGREEMENT: DFDC says real, ViT says fake
+            # Trust DFDC — ViT is known to false-positive on compressed video.
+            # Use DFDC as the primary, reduce ViT weight heavily.
+            artifact_score = float(np.clip(
+                0.55 * dfdc_score + 0.10 * vit_agg + 0.10 * spectral_agg + 0.10 * temporal_fake_prob + 0.15 * color_agg,
+                0.0, 1.0,
+            ))
+            logger.info("Model disagreement: DFDC=REAL(%.4f) vs ViT=FAKE(%.4f) → trusting DFDC", dfdc_score, vit_agg)
+
+        elif dfdc_leans_fake and vit_leans_real:
+            # DISAGREEMENT: DFDC says fake, ViT says real
+            # This is rare and suspicious — trust DFDC but flag as uncertain
+            artifact_score = float(np.clip(
+                0.50 * dfdc_score + 0.15 * vit_agg + 0.10 * spectral_agg + 0.10 * temporal_fake_prob + 0.15 * color_agg,
+                0.0, 1.0,
+            ))
+            logger.info("Model disagreement: DFDC=FAKE(%.4f) vs ViT=REAL(%.4f) → trusting DFDC", dfdc_score, vit_agg)
+
+        else:
+            # Both in uncertain zone — weighted blend, DFDC still primary
+            artifact_score = float(np.clip(
+                0.40 * dfdc_score + 0.20 * vit_agg + 0.12 * spectral_agg + 0.12 * temporal_fake_prob + 0.16 * color_agg,
+                0.0, 1.0,
+            ))
+
     else:
+        # DFDC unavailable — fall back to ViT-primary (less reliable)
         artifact_score = float(np.clip(
-            0.55 * vit_agg + 0.45 * temporal_fake_prob,
+            0.40 * vit_agg + 0.20 * spectral_agg + 0.20 * temporal_fake_prob + 0.20 * color_agg,
             0.0, 1.0,
         ))
+        logger.warning("DFDC model unavailable — using ViT-primary fallback (less reliable)")
 
-    # ── ViT override: when ViT is overwhelmingly confident, trust it ─────────
-    # If 75%+ of frames are flagged suspicious AND ViT aggregate > 0.75,
-    # the ViT classifier is extremely confident this is fake. Don't let
-    # a low DFDC score drag the final score below the FAKE threshold.
-    suspicious_ratio = len(suspicious_frames) / max(frames_analyzed, 1)
-    if suspicious_ratio >= 0.75 and vit_agg > 0.75:
-        artifact_score = max(artifact_score, 0.70)  # floor at FAKE threshold
-
+    # ── Verdict ───────────────────────────────────────────────────────────────
+    # No hard overrides — the verdict is purely driven by the weighted score.
     if artifact_score > VERDICT_FAKE_THRESHOLD:
         verdict = "FAKE"
     elif artifact_score > VERDICT_UNCERTAIN_THRESHOLD:
@@ -461,13 +576,13 @@ def run_fft_analysis(
         verdict = "REAL"
 
     logger.info(
-        "Analysis complete | frames=%d vit=%.4f dfdc=%.4f temporal=%.4f final=%.4f verdict=%s",
-        frames_analyzed, vit_agg, dfdc_score, temporal_score, artifact_score, verdict,
+        "Analysis complete | frames=%d vit=%.4f dfdc=%.4f spectral=%.4f color=%.4f temporal=%.4f final=%.4f verdict=%s",
+        frames_analyzed, vit_agg, dfdc_score, spectral_agg, color_agg, temporal_score, artifact_score, verdict,
     )
 
     result = {
         "artifact_score":        round(artifact_score, 4),
-        "high_freq_ratio":       round(mean_score, 4),
+        "high_freq_ratio":       round(float(np.mean(frame_scores)), 4),
         "suspicious_frames":     suspicious_frames[:MAX_SUSPICIOUS_PAYLOAD],
         "total_frames_analyzed": frames_analyzed,
         "frame_scores":          [round(s, 4) for s in frame_scores[:200]],

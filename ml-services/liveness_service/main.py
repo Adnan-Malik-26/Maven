@@ -70,8 +70,8 @@ class AnalysisRequest(BaseModel):
 
 class LivenessResult(BaseModel):
     liveness_score: float = Field(..., description="Fused liveness score [0=fake, 1=real]")
-    rppg: dict = Field(..., description="rPPG analysis result containing pulse and HR metrics")
-    blink: dict = Field(..., description="Blink analysis result containing rate and regularity metrics")
+    rppg: dict = Field(..., description="rPPG analysis result containing pulse, HR, cross-correlation, and harmonic metrics")
+    blink: dict = Field(..., description="Blink analysis result containing rate, IBI, duration, and waveform metrics")
 
 
 # ---------------------------------------------------------------------------
@@ -133,19 +133,21 @@ async def analyze(req: AnalysisRequest):
         logger.info("Running blink detection for job_id=%s ...", req.job_id)
         blink = analyze_blinks(tmp_path)
         logger.info(
-            "Blink complete — count=%d rate=%.2f/min regularity=%.3f job_id=%s",
+            "Blink complete — count=%d rate=%.2f/min regularity=%.3f ibi=%.3f duration=%.3f waveform=%.3f job_id=%s",
             blink.get("blink_count", 0),
             blink.get("blink_rate_per_min", 0),
             blink.get("regularity_score", 0),
+            blink.get("ibi_score", 0),
+            blink.get("duration_score", 0),
+            blink.get("waveform_score", 0),
             req.job_id,
         )
 
         # ------------------------------------------------------------------
         # 4. Score fusion: 0.70 × rPPG + 0.30 × blink
         # ------------------------------------------------------------------
-        # rPPG is the more reliable signal — cardiac pulse is nearly impossible
-        # for deepfakes to replicate, while blink detection is noisy and prone
-        # to false positives from lighting, head movement, and compression.
+        # rPPG signal_quality now incorporates cross-correlation and harmonic
+        # verification internally, so it is already a richer composite signal.
         #
         # 0.15 when no pulse detected — absence of a cardiac signal is a strong
         # synthetic indicator; real videos with poor lighting still show weak signal
@@ -159,14 +161,21 @@ async def analyze(req: AnalysisRequest):
         if rppg["pulse_present"] and rppg["signal_quality"] > 0.8:
             liveness_score = max(liveness_score, 0.65)
 
+        # Boost: if multi-region rPPG cross-correlation is very high,
+        # this is extremely strong evidence of a real biological signal.
+        cross_corr = rppg.get("cross_correlation", 0.5)
+        if rppg["pulse_present"] and cross_corr > 0.75:
+            liveness_score = max(liveness_score, 0.70)
+
         # Clamp to [0.0, 1.0] as a safety net
         liveness_score = max(0.0, min(1.0, liveness_score))
 
         logger.info(
-            "Liveness score=%.4f (rppg_score=%.3f, blink_score=%.3f, rppg_floor_applied=%s) job_id=%s",
+            "Liveness score=%.4f (rppg_score=%.3f, blink_score=%.3f, cross_corr=%.3f, rppg_floor_applied=%s) job_id=%s",
             liveness_score,
             rppg_score,
             blink_score,
+            cross_corr,
             rppg["pulse_present"] and rppg["signal_quality"] > 0.8,
             req.job_id,
         )

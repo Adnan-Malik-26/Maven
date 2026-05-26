@@ -41,7 +41,7 @@ WEIGHTS_DIR = Path(__file__).resolve().parent / "weights"
 WEIGHT_PATH = WEIGHTS_DIR / WEIGHT_FILENAME
 
 INPUT_SIZE = 380
-NUM_FRAMES  = 15   # frames sampled per video for DFDC inference
+NUM_FRAMES  = 20   # frames sampled per video for DFDC inference
 
 _IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
 _IMAGENET_STD  = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
@@ -174,9 +174,23 @@ def _preprocess(bgr_img: np.ndarray) -> torch.Tensor:
 # Public API
 # ---------------------------------------------------------------------------
 
+def _trimmed_mean(arr: np.ndarray, trim: int = 2) -> float:
+    """Compute trimmed mean — drop the top and bottom `trim` values."""
+    if len(arr) <= 2 * trim + 1:
+        return float(np.mean(arr))
+    sorted_arr = np.sort(arr)
+    return float(np.mean(sorted_arr[trim: len(arr) - trim]))
+
+
 def predict_video(video_path: str, face_crop_fn: Callable) -> float:
     """
     Run the DFDC EfficientNet B7 NS on NUM_FRAMES evenly sampled from the video.
+
+    Improvements:
+      - 20 frames (up from 15) for better temporal coverage
+      - Trimmed mean aggregation (drop top/bottom 2) for outlier resistance
+      - Test-Time Augmentation (TTA): each frame is also evaluated with a
+        horizontal flip, catching one-sided face-swap artifacts
 
     Args:
         video_path   : Absolute local path to the video.
@@ -199,31 +213,45 @@ def predict_video(video_path: str, face_crop_fn: Callable) -> float:
     n_sample = min(NUM_FRAMES, max(1, total))
     indices  = np.linspace(0, max(0, total - 1), n_sample, dtype=int)
 
-    tensors = []
+    tensors_orig = []
+    tensors_flip = []
     for idx in indices:
         cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
         ret, frame = cap.read()
         if not ret:
             continue
         face = face_crop_fn(frame)
-        tensors.append(_preprocess(face))
+        tensors_orig.append(_preprocess(face))
+        # TTA: horizontal flip catches asymmetric face-swap artifacts
+        face_flipped = cv2.flip(face, 1)
+        tensors_flip.append(_preprocess(face_flipped))
 
     cap.release()
 
-    if not tensors:
+    if not tensors_orig:
         return 0.5
 
     with torch.no_grad():
-        batch  = torch.stack(tensors)                          # (N, 3, 380, 380)
-        logits = model(batch)                                  # (N, 1)
-        probs  = torch.sigmoid(logits).squeeze(-1).cpu().numpy()
+        # Original frames
+        batch_orig  = torch.stack(tensors_orig)                 # (N, 3, 380, 380)
+        logits_orig = model(batch_orig)                         # (N, 1)
+        probs_orig  = torch.sigmoid(logits_orig).squeeze(-1).cpu().numpy()
 
-    # ── Return raw score (calibration is now handled in analyzer.py) ─────────
-    raw_mean  = float(np.mean(probs))
-    spread    = float(np.max(probs) - np.min(probs))
+        # Flipped frames (TTA)
+        batch_flip  = torch.stack(tensors_flip)
+        logits_flip = model(batch_flip)
+        probs_flip  = torch.sigmoid(logits_flip).squeeze(-1).cpu().numpy()
+
+    # Average original and flipped predictions per frame
+    probs_avg = (probs_orig + probs_flip) / 2.0
+
+    # Trimmed mean: drop top/bottom 2 outlier frames for robustness
+    robust_mean = _trimmed_mean(probs_avg, trim=2)
+    spread = float(np.max(probs_avg) - np.min(probs_avg))
+
     logger.info(
-        "DFDC raw: mean=%.4f  min=%.4f  max=%.4f  spread=%.4f  (n=%d frames)",
-        raw_mean, float(np.min(probs)), float(np.max(probs)), spread, len(tensors),
+        "DFDC raw: trimmed_mean=%.4f  min=%.4f  max=%.4f  spread=%.4f  (n=%d frames, TTA=on)",
+        robust_mean, float(np.min(probs_avg)), float(np.max(probs_avg)), spread, len(tensors_orig),
     )
 
-    return float(np.clip(raw_mean, 0.0, 1.0))
+    return float(np.clip(robust_mean, 0.0, 1.0))

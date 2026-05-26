@@ -280,18 +280,67 @@ def extract_lip_crops(video_path: str) -> tuple[list, float]:
 # Main analysis entry point
 # ---------------------------------------------------------------------------
 
+def _compute_lip_motion(lip_crops: list[np.ndarray], window_start: int, window_size: int) -> float:
+    """
+    Compute lip motion magnitude within a window by frame-differencing lip crops.
+
+    Low motion during high-energy audio is suspicious — the mouth should be
+    moving if the person is speaking.
+
+    Returns:
+        Motion magnitude in [0, 1].  0 = static mouth, 1 = high motion.
+    """
+    end = min(window_start + window_size, len(lip_crops))
+    if end - window_start < 2:
+        return 0.5
+
+    diffs = []
+    for i in range(window_start + 1, end):
+        prev = lip_crops[i - 1].astype(np.float32)
+        curr = lip_crops[i].astype(np.float32)
+        diff = np.mean(np.abs(curr - prev))
+        diffs.append(diff)
+
+    if not diffs:
+        return 0.5
+
+    mean_diff = float(np.mean(diffs))
+    # Normalize: typical lip motion diffs range from ~2 (still) to ~25 (speaking)
+    return float(np.clip(mean_diff / 20.0, 0.0, 1.0))
+
+
+def _compute_window_audio_energy(
+    audio: np.ndarray, sr: int, fps: float,
+    window_start: int, window_size: int,
+) -> float:
+    """Compute RMS energy for the audio segment corresponding to a video window."""
+    start_sample = int((window_start / fps) * sr)
+    end_sample = int(((window_start + window_size) / fps) * sr)
+    segment = audio[start_sample:end_sample]
+    if len(segment) == 0:
+        return 0.0
+    return float(np.sqrt(np.mean(segment ** 2)))
+
+
 def analyze_lipsync(video_path: str) -> dict:
     """
     Run Wav2Lip SyncNet lipsync analysis on a video file.
 
+    Improvements over v1:
+      - Percentile-based scoring: 50% mean + 30% 25th-percentile + 20% median
+      - Consecutive-bad-window detection: 3+ bad windows → penalty
+      - Speech-energy weighting: high-energy windows count more
+      - Lip motion magnitude: static mouth during speech → fake signal
+
     Pipeline:
     1. Load SyncNet model (singleton)
-    2. Extract audio + MFCCs
+    2. Extract audio + mel spectrogram
     3. Extract per-frame lip crops
     4. Score each 5-frame window with SyncNet
     5. Skip silent windows to avoid false positives
-    6. Merge adjacent flagged segments
-    7. Return verdict + sync_score + flagged_segments
+    6. Apply robust scoring (percentile + penalty + motion)
+    7. Merge adjacent flagged segments
+    8. Return verdict + sync_score + flagged_segments
 
     Returns a dict matching the LipSyncResult schema.
     """
@@ -340,9 +389,10 @@ def analyze_lipsync(video_path: str) -> dict:
     audio_frames_per_video_frame = mel_spec.shape[1] / len(lip_crops)
 
     # -----------------------------------------------------------------------
-    # 5. Sliding window inference
+    # 5. Sliding window inference with speech-energy weighting
     # -----------------------------------------------------------------------
     window_scores: list[float] = []
+    window_energies: list[float] = []
     flagged_segments: list[dict] = []
 
     for i in range(0, len(lip_crops) - WINDOW_FRAMES, WINDOW_STRIDE):
@@ -358,8 +408,12 @@ def analyze_lipsync(video_path: str) -> dict:
         # Skip silent windows — silence is not evidence of fake
         frame_samples_start = int((i / fps) * sr)
         frame_samples_end   = int(((i + WINDOW_FRAMES) / fps) * sr)
-        if is_silent(audio[frame_samples_start:frame_samples_end], SILENCE_RMS_THRESH):
+        audio_segment = audio[frame_samples_start:frame_samples_end]
+        if is_silent(audio_segment, SILENCE_RMS_THRESH):
             continue
+
+        # Compute audio energy for this window (for weighting later)
+        window_energy = float(np.sqrt(np.mean(audio_segment ** 2)))
 
         # -------------------------------------------------------------------
         # Prepare video tensor: stack 5 RGB frames on channel dim
@@ -397,7 +451,16 @@ def analyze_lipsync(video_path: str) -> dict:
         with torch.no_grad():
             score = float(torch.sigmoid(model(audio_tensor, video_tensor)).item())
 
+        # -------------------------------------------------------------------
+        # Lip motion check: static mouth during speech is suspicious
+        # -------------------------------------------------------------------
+        lip_motion = _compute_lip_motion(lip_crops, i, WINDOW_FRAMES)
+        if lip_motion < 0.08 and window_energy > 0.03:
+            # Very low lip motion during active speech → penalize sync score
+            score = score * 0.6  # reduce by 40%
+
         window_scores.append(score)
+        window_energies.append(window_energy)
         start_sec = round(i / fps, 2)
         end_sec   = round((i + WINDOW_FRAMES) / fps, 2)
 
@@ -421,20 +484,67 @@ def analyze_lipsync(video_path: str) -> dict:
             "weights_loaded": is_weights_loaded(),
         }
 
-    mean_score = float(np.mean(window_scores))
+    # -----------------------------------------------------------------------
+    # 7. Robust scoring — percentile-based + penalties
+    # -----------------------------------------------------------------------
+    scores_arr = np.array(window_scores)
+
+    # Percentile-based scoring captures worst-case regions better than mean
+    mean_score = float(np.mean(scores_arr))
+    p25_score  = float(np.percentile(scores_arr, 25))
+    median_score = float(np.median(scores_arr))
+
+    # Weighted robust score: 50% mean + 30% p25 + 20% median
+    robust_score = 0.50 * mean_score + 0.30 * p25_score + 0.20 * median_score
+
+    # Consecutive-bad-window penalty: sustained desync is evidence of fake.
+    # But the penalty must be proportional to the total number of windows —
+    # 5 bad windows in a 500-window video is noise, not evidence.
+    # Also, SyncNet baseline scores hover around 0.45–0.55, so the "bad"
+    # threshold must be lower (0.30) to avoid penalizing normal variation.
+    max_consecutive_bad = 0
+    current_consecutive = 0
+    for s in window_scores:
+        if s < 0.30:  # lowered from 0.4 — SyncNet baseline is ~0.50
+            current_consecutive += 1
+            max_consecutive_bad = max(max_consecutive_bad, current_consecutive)
+        else:
+            current_consecutive = 0
+
+    # Only penalize if bad windows are a significant fraction (>5%) of total
+    bad_ratio = max_consecutive_bad / max(len(window_scores), 1)
+    if max_consecutive_bad >= 5 and bad_ratio > 0.05:
+        penalty = min(0.08, max_consecutive_bad * 0.01)
+        robust_score = max(0.0, robust_score - penalty)
+        logger.info(
+            "LipSync: consecutive bad windows=%d (%.1f%% of total) → penalty=%.3f",
+            max_consecutive_bad, bad_ratio * 100, penalty,
+        )
+
+    # Speech-energy weighted score: windows with more speech count more
+    if window_energies and sum(window_energies) > 0:
+        energy_weights = np.array(window_energies)
+        energy_weights = energy_weights / (np.sum(energy_weights) + 1e-10)
+        energy_weighted_score = float(np.dot(scores_arr, energy_weights))
+        # Blend: 70% robust + 30% energy-weighted
+        final_score = 0.70 * robust_score + 0.30 * energy_weighted_score
+    else:
+        final_score = robust_score
+
+    final_score = float(np.clip(final_score, 0.0, 1.0))
 
     # -----------------------------------------------------------------------
-    # 7. Verdict
+    # 8. Verdict
     # -----------------------------------------------------------------------
-    if mean_score < 0.35:
+    if final_score < 0.35:
         verdict = "OUT_OF_SYNC"
-    elif mean_score < 0.50:
+    elif final_score < 0.50:
         verdict = "UNCERTAIN"
     else:
         verdict = "IN_SYNC"
 
     # -----------------------------------------------------------------------
-    # 8. Merge adjacent flagged segments (gap < 0.5s)
+    # 9. Merge adjacent flagged segments (gap < 0.5s)
     # -----------------------------------------------------------------------
     merged: list[dict] = []
     for seg in flagged_segments:
@@ -445,15 +555,18 @@ def analyze_lipsync(video_path: str) -> dict:
             merged.append(dict(seg))
 
     logger.info(
-        "analyze_lipsync complete — score=%.4f verdict=%s windows=%d flagged=%d",
+        "analyze_lipsync complete — mean=%.4f p25=%.4f robust=%.4f final=%.4f verdict=%s windows=%d flagged=%d",
         mean_score,
+        p25_score,
+        robust_score,
+        final_score,
         verdict,
         len(window_scores),
         len(merged),
     )
 
     return {
-        "sync_score": round(mean_score, 4),
+        "sync_score": round(final_score, 4),
         "verdict": verdict,
         "flagged_segments": merged[:10],  # cap at 10 entries for payload size
         "windows_analyzed": len(window_scores),
