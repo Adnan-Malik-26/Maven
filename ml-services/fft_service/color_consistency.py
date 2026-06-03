@@ -214,11 +214,14 @@ def compute_color_mismatch_score(
         gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
         faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(60, 60))
         if len(faces) == 0:
+            # BUG FIX: Return neutral 0.5 instead of 0.0 — no face detected means
+            # no opinion, not "perfectly consistent (real)".  The old 0.0 biased
+            # the final score toward real when face detection failed.
             return {
-                "color_mismatch_score": 0.0,
-                "histogram_distance": 0.0,
-                "luminance_edge": 0.0,
-                "chroma_shift": 0.0,
+                "color_mismatch_score": 0.5,
+                "histogram_distance": 0.5,
+                "luminance_edge": 0.5,
+                "chroma_shift": 0.5,
             }
         face_box = tuple(max(faces, key=lambda f: f[2] * f[3]))
 

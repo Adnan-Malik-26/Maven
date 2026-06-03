@@ -29,8 +29,10 @@ LEFT_CHEEK_LMKS  = [234, 127, 162, 21, 54, 103, 67, 109]
 RIGHT_CHEEK_LMKS = [454, 356, 389, 251, 284, 332, 297, 338]
 
 # Minimum frames required for a reliable HR estimate
-# 200 frames ≈ 8 seconds at 25 fps — sufficient for one full cardiac cycle window
-MIN_FRAMES_FOR_RPPG = 200
+# 100 frames ≈ 4 seconds at 25 fps — lowered from 200 to capture short clips.
+# BUG FIX: Modern AI clips are often 3–5 seconds; the old 200-frame threshold
+# silently rejected rPPG for all of them, returning signal_quality=0.1.
+MIN_FRAMES_FOR_RPPG = 100
 
 # Bandpass filter range (Hz) → 45–180 BPM
 BP_LOW  = 0.75
