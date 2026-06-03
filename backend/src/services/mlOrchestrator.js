@@ -21,7 +21,7 @@ async function runMLAnalysis(videoPath, jobId) {
     try {
         // Create an AbortController for the 2-minute timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes
+        const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minutes
 
         const makeRequestOptions = (body) => ({
             method: 'POST',
@@ -32,7 +32,7 @@ async function runMLAnalysis(videoPath, jobId) {
 
         // Call the 3 services in parallel using built-in fetch
         const [fftResponse, livenessResponse, lipsyncResponse] = await Promise.all([
-            fetch(ML_SERVICES.fft, makeRequestOptions({ video_path: videoPath })),
+            fetch(ML_SERVICES.fft, makeRequestOptions({ video_path: videoPath, max_frames: 15 })),
             fetch(ML_SERVICES.liveness, makeRequestOptions({ video_url: videoPath, job_id: jobId })),
             fetch(ML_SERVICES.lipsync, makeRequestOptions({ video_url: videoPath, job_id: jobId }))
         ]);

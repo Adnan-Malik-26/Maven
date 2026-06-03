@@ -380,6 +380,7 @@ def analyze_lipsync(video_path: str) -> dict:
             "verdict": "INSUFFICIENT_DATA",
             "flagged_segments": [],
             "windows_analyzed": 0,
+            "weights_loaded": is_weights_loaded(),
         }
 
     # -----------------------------------------------------------------------

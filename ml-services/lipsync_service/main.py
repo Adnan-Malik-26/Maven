@@ -73,6 +73,7 @@ class LipSyncResult(BaseModel):
     verdict: str = Field(..., description="IN_SYNC | UNCERTAIN | OUT_OF_SYNC | INSUFFICIENT_DATA | NO_SPEECH_DETECTED")
     flagged_segments: list[dict] = Field(..., description="List of out-of-sync segments: {start_sec, end_sec, score}")
     windows_analyzed: int = Field(..., description="Total number of 5-frame windows scored by SyncNet")
+    weights_loaded: bool = Field(default=False, description="Whether the Wav2Lip SyncNet weights were successfully loaded")
 
 
 # ---------------------------------------------------------------------------
