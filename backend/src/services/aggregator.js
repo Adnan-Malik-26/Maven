@@ -27,38 +27,47 @@ function computeFinalVerdict({ fftResult, livenessResult, lipsyncResult }) {
   const jitterScore = temporal?.jitter_score ?? 0.0;
 
   // ── Weights ─────────────────────────────────────────────────────────────
+  // BUG FIX: LipSync NO_SPEECH / INSUFFICIENT_DATA should get 0% weight
+  // instead of 35% — neutral 0.5 scores dilute genuine fake signals.
+  // BUG FIX: Liveness weight raised from 5% to 15% — heartbeat absence
+  // is a strong biological signal that was being effectively ignored.
   let fftW, livenessW, lipsyncW, temporalW;
+
+  const lipsyncNoData =
+    lipsyncResult.weights_loaded === false ||
+    lipsyncResult.verdict === "NO_SPEECH_DETECTED" ||
+    lipsyncResult.verdict === "INSUFFICIENT_DATA";
 
   if (!temporalAvailable) {
     temporalW = 0.0;
 
-    if (lipsyncResult.weights_loaded === false) {
-      fftW = 0.8;
-      livenessW = 0.2;
+    if (lipsyncNoData) {
+      fftW = 0.70;
+      livenessW = 0.30;
       lipsyncW = 0.0;
     } else if (lipsyncResult.verdict === "UNCERTAIN") {
-      fftW = 0.6;
-      livenessW = 0.1;
-      lipsyncW = 0.3;
-    } else {
       fftW = 0.55;
-      livenessW = 0.1;
+      livenessW = 0.15;
+      lipsyncW = 0.30;
+    } else {
+      fftW = 0.50;
+      livenessW = 0.15;
       lipsyncW = 0.35;
     }
   } else {
     temporalW = 0.15;
 
-    if (lipsyncResult.weights_loaded === false) {
-      fftW = 0.7;
-      livenessW = 0.15;
+    if (lipsyncNoData) {
+      fftW = 0.55;
+      livenessW = 0.30;
       lipsyncW = 0.0;
     } else if (lipsyncResult.verdict === "UNCERTAIN") {
-      fftW = 0.5;
-      livenessW = 0.05;
-      lipsyncW = 0.3;
+      fftW = 0.40;
+      livenessW = 0.15;
+      lipsyncW = 0.30;
     } else {
-      fftW = 0.45;
-      livenessW = 0.05;
+      fftW = 0.35;
+      livenessW = 0.15;
       lipsyncW = 0.35;
     }
   }
@@ -95,6 +104,8 @@ function computeFinalVerdict({ fftResult, livenessResult, lipsyncResult }) {
 
   // ── Model agreement scoring ─────────────────────────────────────────────
   // Count how many independent signals lean FAKE (above 0.55)
+  // BUG FIX: Services that returned no meaningful data (NO_SPEECH, short video,
+  // etc.) should NOT count as "leaning real" — they have no opinion.
   const fakeThreshold = 0.55;
   let modelsLeaningFake = 0;
   let modelsLeaningReal = 0;
@@ -102,10 +113,13 @@ function computeFinalVerdict({ fftResult, livenessResult, lipsyncResult }) {
   if (fftFakeProb > fakeThreshold) modelsLeaningFake++;
   else if (fftFakeProb < 0.40) modelsLeaningReal++;
 
+  // Liveness: only count as "leaning real" if rPPG had enough frames to analyze
+  const livenessHadData = livenessResult.rppg?.frames_analyzed >= 100;
   if (livenessFakeProb > fakeThreshold) modelsLeaningFake++;
-  else if (livenessFakeProb < 0.40) modelsLeaningReal++;
+  else if (livenessFakeProb < 0.40 && livenessHadData) modelsLeaningReal++;
 
-  if (lipsyncResult.weights_loaded !== false) {
+  // LipSync: only count if it had meaningful speech to analyze
+  if (!lipsyncNoData) {
     if (lipsyncFakeProb > fakeThreshold) modelsLeaningFake++;
     else if (lipsyncFakeProb < 0.40) modelsLeaningReal++;
   }
@@ -123,6 +137,7 @@ function computeFinalVerdict({ fftResult, livenessResult, lipsyncResult }) {
   }
 
   // Agreement damping: if only 1 model leans FAKE and others lean REAL, dampen
+  // But require at least 2 models with ACTUAL DATA to lean real (not just neutral)
   if (modelsLeaningFake === 1 && modelsLeaningReal >= 2) {
     finalFakeProb = Math.max(0.0, finalFakeProb - 0.06);
   }
@@ -175,10 +190,15 @@ function computeFinalVerdict({ fftResult, livenessResult, lipsyncResult }) {
   }
 
   // ── Strong-REAL override ───────────────────────────────────────────────
-  if (fftFakeProb < 0.3 && livenessFakeProb < 0.2 && lipsyncFakeProb < 0.6) {
+  // BUG FIX: Tightened thresholds — all models must ACTIVELY indicate real,
+  // not just be neutral.  The old lipsyncFakeProb < 0.6 let NO_SPEECH (0.5)
+  // pass, which combined with DFDC being out-of-domain on diffusion video
+  // to override genuine fake signals.
+  if (fftFakeProb < 0.25 && livenessFakeProb < 0.25 && lipsyncFakeProb < 0.35) {
     verdict = "REAL";
   }
-  if (modelsLeaningReal >= 3 && finalFakeProb < 0.50) {
+  // Only override to REAL on model agreement if models that voted had actual data
+  if (modelsLeaningReal >= 3 && finalFakeProb < 0.45) {
     verdict = "REAL";
   }
 

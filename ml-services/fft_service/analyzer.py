@@ -77,9 +77,11 @@ LAP_VAR_UPPER = 300.0
 # Only scores below VIT_CONFIDENCE_THRESHOLD are treated as ambiguous noise.
 # Lowered 0.65 → 0.60: genuine deepfakes score 0.70–0.85 on ViT and must NOT
 # be compressed — only the ambiguous 0.50–0.60 zone (compression artifacts) is remapped.
-# Calibration remaps [0, VIT_CONFIDENCE_THRESHOLD] → [0, 0.45] (real-leaning)
-#                    [VIT_CONFIDENCE_THRESHOLD, 1.0] → [0.45, 1.0] (signal preserved)
-VIT_CONFIDENCE_THRESHOLD = 0.60
+# Calibration remaps [0, VIT_CONFIDENCE_THRESHOLD] → [0, 0.42] (real-leaning)
+#                    [VIT_CONFIDENCE_THRESHOLD, 1.0] → [0.42, 1.0] (signal preserved)
+# BUG FIX: Lowered from 0.60→0.58 and adjusted ratio to preserve more
+# upper-range signal. A raw 0.72 now maps to ~0.63 instead of ~0.615.
+VIT_CONFIDENCE_THRESHOLD = 0.58
 
 # Maximum suspicious frames returned in the payload
 MAX_SUSPICIOUS_PAYLOAD = 50
@@ -193,17 +195,18 @@ def _calibrate_vit_score(raw_score: float) -> float:
     video. Scores below VIT_CONFIDENCE_THRESHOLD are ambiguous noise, not a genuine
     fake signal. This function applies a piecewise linear remap:
 
-        [0,   VIT_CONFIDENCE_THRESHOLD] → [0,    0.45]  (compress toward real)
-        [VIT_CONFIDENCE_THRESHOLD, 1.0] → [0.45, 1.0]   (preserve genuine fake signal)
+        [0,   VIT_CONFIDENCE_THRESHOLD] → [0,    0.42]  (compress toward real)
+        [VIT_CONFIDENCE_THRESHOLD, 1.0] → [0.42, 1.0]   (preserve genuine fake signal)
 
     Examples:
-        0.55 (real compressed video)  → 0.38  (correctly real-leaning)
-        0.65 (boundary)               → 0.45  (neutral)
+        0.55 (real compressed video)  → 0.40  (correctly real-leaning)
+        0.58 (boundary)               → 0.42  (neutral)
+        0.72 (moderate deepfake)      → 0.63  (preserved as fake-leaning)
         0.80 (clear deepfake)         → 0.72  (still strongly fake)
     """
     if raw_score <= VIT_CONFIDENCE_THRESHOLD:
-        return raw_score * (0.45 / VIT_CONFIDENCE_THRESHOLD)
-    return 0.45 + (raw_score - VIT_CONFIDENCE_THRESHOLD) * (0.55 / (1.0 - VIT_CONFIDENCE_THRESHOLD))
+        return raw_score * (0.42 / VIT_CONFIDENCE_THRESHOLD)
+    return 0.42 + (raw_score - VIT_CONFIDENCE_THRESHOLD) * (0.58 / (1.0 - VIT_CONFIDENCE_THRESHOLD))
 
 
 def _vit_score_and_embedding(
@@ -534,13 +537,29 @@ def run_fft_analysis(
 
         elif dfdc_leans_real and vit_leans_fake:
             # DISAGREEMENT: DFDC says real, ViT says fake
-            # Trust DFDC — ViT is known to false-positive on compressed video.
-            # Use DFDC as the primary, reduce ViT weight heavily.
-            artifact_score = float(np.clip(
-                0.55 * dfdc_score + 0.10 * vit_agg + 0.10 * spectral_agg + 0.10 * temporal_fake_prob + 0.15 * color_agg,
-                0.0, 1.0,
-            ))
-            logger.info("Model disagreement: DFDC=REAL(%.4f) vs ViT=FAKE(%.4f) → trusting DFDC", dfdc_score, vit_agg)
+            # BUG FIX: When DFDC is near-zero AND ViT is elevated, DFDC may be
+            # out-of-domain (diffusion video generators like Sora/Veo/Kling).
+            # DFDC was trained on DFDC 2020 face-swaps and returns ~0.01 on
+            # content it has never seen.  In this case, elevate ViT weight
+            # instead of suppressing it.
+            if dfdc_score < 0.05 and vit_agg > 0.65:
+                # Out-of-domain: DFDC has no opinion on this content type
+                artifact_score = float(np.clip(
+                    0.15 * dfdc_score + 0.35 * vit_agg + 0.15 * spectral_agg + 0.15 * temporal_fake_prob + 0.20 * color_agg,
+                    0.0, 1.0,
+                ))
+                logger.warning(
+                    "DFDC near-zero (%.4f) + ViT elevated (%.4f) → possible out-of-domain content "
+                    "(diffusion video generator), elevating ViT weight",
+                    dfdc_score, vit_agg,
+                )
+            else:
+                # Normal disagreement — trust DFDC (ViT compression bias)
+                artifact_score = float(np.clip(
+                    0.55 * dfdc_score + 0.10 * vit_agg + 0.10 * spectral_agg + 0.10 * temporal_fake_prob + 0.15 * color_agg,
+                    0.0, 1.0,
+                ))
+                logger.info("Model disagreement: DFDC=REAL(%.4f) vs ViT=FAKE(%.4f) → trusting DFDC", dfdc_score, vit_agg)
 
         elif dfdc_leans_fake and vit_leans_real:
             # DISAGREEMENT: DFDC says fake, ViT says real
