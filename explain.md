@@ -1449,5 +1449,3 @@ For a portfolio project targeting FAANG placements, this demonstrates: distribut
 - **Aggregator:** Hand-tuned weights and thresholds, not statistically calibrated on a labeled validation set
 
 ---
-
-*Document corrected via exhaustive codebase analysis of all source files, routes, service implementations, model architectures, and database schemas. Version 2.0 reflects the actual implementation as of June 2026.*
