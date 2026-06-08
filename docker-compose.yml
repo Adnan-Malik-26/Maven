@@ -1,0 +1,123 @@
+version: "3.9"
+
+# ── MAVEN — Production Docker Compose ─────────────────────────────────────────
+# All environment variables are loaded from a root-level .env file.
+# Copy .env.production.example → .env and fill in your values before running.
+#
+# Usage:
+#   docker compose up --build -d          # build and start all services
+#   docker compose logs -f backend         # tail a specific service
+#   docker compose down                    # stop and remove containers
+
+services:
+
+  # ── Backend — Node.js + Express + Socket.IO ─────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: maven-backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      SUPABASE_ACCESS_TOKEN: ${SUPABASE_ACCESS_TOKEN}
+      FFT_SERVICE_URL: http://fft-service:8001/analyze
+      LIVENESS_SERVICE_URL: http://liveness-service:8002/analyze
+      LIPSYNC_SERVICE_URL: http://lipsync-service:8003/analyze
+    depends_on:
+      - fft-service
+      - liveness-service
+      - lipsync-service
+    networks:
+      - maven-internal
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── FFT Service — Frequency-domain deepfake detection ───────────────────────
+  fft-service:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.fft
+    container_name: maven-fft
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    volumes:
+      # Mount pre-trained weights into the container (not baked into image)
+      - ./ml-services/fft_service/weights:/app/weights:ro
+    networks:
+      - maven-internal
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Liveness Service — rPPG + Blink detection ────────────────────────────────
+  liveness-service:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.liveness
+    container_name: maven-liveness
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    networks:
+      - maven-internal
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── LipSync Service — Wav2Lip SyncNet ────────────────────────────────────────
+  lipsync-service:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.lipsync
+    container_name: maven-lipsync
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    networks:
+      - maven-internal
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Nginx — Reverse proxy (serves frontend static files + routes /api) ───────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: maven-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      # TLS certificates (managed by Certbot or mounted manually)
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - backend
+    networks:
+      - maven-internal
+      - maven-external
+
+networks:
+  maven-internal:
+    driver: bridge
+    internal: true      # ML services are NOT reachable from outside the host
+  maven-external:
+    driver: bridge      # Only Nginx faces the public internet
